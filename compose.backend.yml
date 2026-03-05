@@ -1,0 +1,52 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fablab-backend
+    env_file:
+      - .env.orchestrateur
+    environment:
+      APP_MODULE: app.backend_main:app
+      APP_PORT: 8000
+      BACKEND_DATABASE_URL: ${BACKEND_DATABASE_URL:-sqlite:////data/backend.db}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - backend_data:/data
+    networks:
+      - platform_net
+    restart: unless-stopped
+
+  backoffice:
+    image: nginx:1.27-alpine
+    container_name: fablab-backoffice
+    depends_on:
+      - backend
+    ports:
+      - "${BACKOFFICE_PORT:-8080}:80"
+    volumes:
+      - ./deploy/backoffice/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/backoffice/index.html:/usr/share/nginx/html/index.html:ro
+    networks:
+      - platform_net
+    restart: unless-stopped
+
+  frontoffice:
+    image: nginx:1.27-alpine
+    container_name: fablab-frontoffice
+    ports:
+      - "${FRONTOFFICE_PORT:-8081}:80"
+    volumes:
+      - ./deploy/frontoffice/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/frontoffice/index.html:/usr/share/nginx/html/index.html:ro
+    networks:
+      - platform_net
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+
+networks:
+  platform_net:
+    driver: bridge

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fablab Backoffice</title>
+  <style>
+    :root { --bg:#f4f7f8; --card:#ffffff; --text:#17212b; --accent:#0f766e; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: radial-gradient(circle at 20% 20%, #d7f2ee, #f3f8fb 60%);
+      color: var(--text);
+    }
+    main {
+      max-width: 840px;
+      margin: 48px auto;
+      padding: 0 20px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 10px 26px rgba(15, 118, 110, 0.12);
+    }
+    h1 { margin-top: 0; }
+    code {
+      background: #eef3f6;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>Backoffice</h1>
+      <p>Service backoffice deployee. Tu peux brancher l'UI ici.</p>
+      <p>API backend disponible via <code>/api/*</code> (proxy Nginx).</p>
+      <p>Health backend: <a href="/api/health">/api/health</a></p>
+      <p>Swagger backend: <a href="/api/docs">/api/docs</a></p>
+    </section>
+  </main>
+</body>
+</html>
