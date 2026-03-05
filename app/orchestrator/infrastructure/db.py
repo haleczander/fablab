@@ -4,6 +4,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from sqlalchemy import text
 
 from app.config import ORCH_DATABASE_URL
+from app.orchestrator.domain import models as _models  # noqa: F401
 
 engine = create_engine(ORCH_DATABASE_URL, echo=False, pool_pre_ping=True)
 

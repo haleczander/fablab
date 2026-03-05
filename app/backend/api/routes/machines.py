@@ -1,20 +1,11 @@
-import asyncio
+﻿import asyncio
 import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.backend.infrastructure.orchestrator_ws import (
-    get_machine_states,
-    subscribe_machine_states,
-    unsubscribe_machine_states,
-)
+from app.backend.infrastructure.orchestrator_ws import subscribe_machine_states, unsubscribe_machine_states, get_machine_states
 
 router = APIRouter(tags=["backend-api"])
-
-
-@router.get("/machines/live")
-def list_machines_live() -> list[dict[str, str | None]]:
-    return get_machine_states()
 
 
 @router.websocket("/ws/machines")

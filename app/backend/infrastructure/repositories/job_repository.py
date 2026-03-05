@@ -11,16 +11,16 @@ class SqlModelJobRepository:
         statement = select(BackendJob).order_by(BackendJob.created_at.desc())
         return list(self.session.exec(statement).all())
 
-    def get_by_job_id(self, job_id: str) -> BackendJob | None:
-        statement = select(BackendJob).where(BackendJob.job_id == job_id)
-        return self.session.exec(statement).first()
-
-    def get_next_queued_for_printer(self, printer_id: str) -> BackendJob | None:
+    def list_queued_jobs(self) -> list[BackendJob]:
         statement = (
             select(BackendJob)
-            .where(BackendJob.printer_id == printer_id, BackendJob.status == "QUEUED")
+            .where(BackendJob.status == "QUEUED")
             .order_by(BackendJob.created_at.asc())
         )
+        return list(self.session.exec(statement).all())
+
+    def get_by_job_id(self, job_id: str) -> BackendJob | None:
+        statement = select(BackendJob).where(BackendJob.job_id == job_id)
         return self.session.exec(statement).first()
 
     def save(self, job: BackendJob) -> BackendJob:

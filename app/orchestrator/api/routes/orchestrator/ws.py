@@ -1,0 +1,64 @@
+import json
+
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+
+from app.orchestrator.api.dependencies import (
+    get_list_fleet_use_case,
+    get_list_unbound_ips_use_case,
+    get_machine_states_payload_use_case,
+)
+from app.orchestrator.api.events import (
+    ws_events_clients,
+    ws_events_lock,
+    ws_machine_clients,
+    ws_machine_lock,
+)
+from app.orchestrator.application.use_cases import ListFleetUseCase, ListUnboundIpsUseCase, MachineStatesPayloadUseCase
+
+router = APIRouter(tags=["orchestrator"])
+
+
+@router.websocket("/ws/events")
+async def ws_events(
+    websocket: WebSocket,
+    list_fleet_use_case: ListFleetUseCase = Depends(get_list_fleet_use_case),
+    list_unbound_ips_use_case: ListUnboundIpsUseCase = Depends(get_list_unbound_ips_use_case),
+) -> None:
+    await websocket.accept()
+    with ws_events_lock:
+        ws_events_clients.add(websocket)
+    try:
+        snapshot = {
+            "fleet": list_fleet_use_case.execute(),
+            "unbound_ips": list_unbound_ips_use_case.execute(),
+        }
+        await websocket.send_text(json.dumps({"event": "snapshot", "payload": snapshot}))
+        while True:
+            if await websocket.receive_text() == "ping":
+                await websocket.send_text(json.dumps({"event": "pong", "payload": None}))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        with ws_events_lock:
+            ws_events_clients.discard(websocket)
+
+
+@router.websocket("/ws/machines")
+async def ws_machines(
+    websocket: WebSocket,
+    machine_states_use_case: MachineStatesPayloadUseCase = Depends(get_machine_states_payload_use_case),
+) -> None:
+    await websocket.accept()
+    with ws_machine_lock:
+        ws_machine_clients.add(websocket)
+    try:
+        snapshot = machine_states_use_case.execute()
+        await websocket.send_text(json.dumps({"event": "machines_snapshot", "payload": snapshot}))
+        while True:
+            if await websocket.receive_text() == "ping":
+                await websocket.send_text(json.dumps({"event": "pong", "payload": None}))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        with ws_machine_lock:
+            ws_machine_clients.discard(websocket)

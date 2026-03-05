@@ -2,10 +2,15 @@ import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import Session
 
 from app.backend.api.routes.backend import router as backend_router
+from app.backend.application.use_cases import RetryQueuedJobsUseCase
 from app.backend.infrastructure.db import init_db
+from app.backend.infrastructure.db import engine
+from app.backend.infrastructure.orchestrator_gateway import OrchestratorGateway
 from app.backend.infrastructure.orchestrator_ws import consume_machine_feed
+from app.backend.infrastructure.repositories import SqlModelJobRepository
 
 app = FastAPI(title="fablab-backend-api")
 _ws_stop_event: asyncio.Event | None = None
@@ -33,6 +38,11 @@ app.add_middleware(
 async def startup() -> None:
     global _ws_stop_event, _ws_task
     init_db()
+    with Session(engine) as session:
+        RetryQueuedJobsUseCase(
+            job_repo=SqlModelJobRepository(session),
+            orchestrator_gateway=OrchestratorGateway(),
+        ).execute()
     _ws_stop_event = asyncio.Event()
     _ws_task = asyncio.create_task(consume_machine_feed(_ws_stop_event))
 

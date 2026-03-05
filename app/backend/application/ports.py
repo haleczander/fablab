@@ -20,11 +20,16 @@ class JobRepositoryPort(Protocol):
     def list_jobs(self) -> list[BackendJob]:
         ...
 
+    def list_queued_jobs(self) -> list[BackendJob]:
+        ...
+
     def get_by_job_id(self, job_id: str) -> BackendJob | None:
         ...
 
-    def get_next_queued_for_printer(self, printer_id: str) -> BackendJob | None:
+    def save(self, job: BackendJob) -> BackendJob:
         ...
 
-    def save(self, job: BackendJob) -> BackendJob:
+
+class OrchestratorGatewayPort(Protocol):
+    def enqueue_start_print(self, printer_id: str, job_id: str, est_duration_s: int) -> None:
         ...

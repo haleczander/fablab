@@ -25,16 +25,3 @@ def post_printer_state(printer_id: str, payload: dict) -> bool:
             if i == 0:
                 time.sleep(0.4)
     return False
-
-
-def get_next_job(printer_id: str) -> dict | None:
-    url = f"{BACKEND_API_URL}/printers/{printer_id}/next-job"
-    request = Request(url=url, headers=_headers(), method="GET")
-    for i in range(2):
-        try:
-            with urlopen(request, timeout=BACKEND_TIMEOUT_S) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except (URLError, TimeoutError, json.JSONDecodeError):
-            if i == 0:
-                time.sleep(0.4)
-    return None

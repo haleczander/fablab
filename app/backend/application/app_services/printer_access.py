@@ -1,4 +1,5 @@
 from app.backend.application.ports import PrinterRepositoryPort
+from app.backend.application.exceptions import PrinterNotRegisteredError
 from app.backend.domain.models import BackendPrinter
 from app.backend.domain.services import BackendDomainService
 
@@ -19,4 +20,6 @@ class PrinterAccessService:
         return self.printer_repo.save(self.domain_service.new_printer(printer_id))
 
     def ensure_exists(self, printer_id: str) -> None:
-        self.get_or_create(printer_id)
+        printer = self.printer_repo.get_by_printer_id(printer_id)
+        if not printer:
+            raise PrinterNotRegisteredError(f"printer_id inconnu: {printer_id}")

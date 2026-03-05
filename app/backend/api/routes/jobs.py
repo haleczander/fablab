@@ -1,9 +1,10 @@
-import json
+﻿import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.backend.api.dependencies import BackendDependencies, get_backend_dependencies
+from app.backend.application.exceptions import DispatchTargetNotFoundError, PrinterNotRegisteredError
 from app.backend.application.use_cases import CreateJobUseCase, ListJobsUseCase, UpdateJobProgressUseCase
 from app.backend.domain.models import BackendJob
 from app.backend.domain.schemas import CreateJobInput, JobProgressInput
@@ -25,14 +26,18 @@ async def _broadcast(event: str, payload: dict | list | None = None) -> None:
         ws_clients.discard(client)
 
 
-@router.get("/jobs", response_model=list[BackendJob])
-def list_jobs(deps: BackendDependencies = Depends(get_backend_dependencies)) -> list[BackendJob]:
-    return ListJobsUseCase(job_repo=deps.job_repo).execute()
-
-
 @router.post("/jobs", response_model=BackendJob)
 async def create_job(payload: CreateJobInput, deps: BackendDependencies = Depends(get_backend_dependencies)) -> BackendJob:
-    row = CreateJobUseCase(job_repo=deps.job_repo, printer_access=deps.printer_access).execute(payload)
+    try:
+        row = CreateJobUseCase(
+            job_repo=deps.job_repo,
+            printer_access=deps.printer_access,
+            orchestrator_gateway=deps.orchestrator_gateway,
+        ).execute(payload)
+    except PrinterNotRegisteredError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    except DispatchTargetNotFoundError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
     await _broadcast("job_created", row.model_dump(mode="json"))
     return row
 
