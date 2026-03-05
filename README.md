@@ -17,8 +17,15 @@ Orchestrateur (`app.main:app`):
 - `GET /printer-bindings`
 - `POST /printer-bindings`
 - `POST /printers/{printer_id}/state`
-- `POST /printers/state-ingest`
+- `POST /devices/state-ingest`
 - `POST /printers/{printer_id}/jobs/poll-once`
+- `GET /dashboard` (UI supervision orchestrateur)
+- `POST /discovery/scan` (scan CIDR + detection adapter/modele)
+
+## Adapters Orchestrateur
+- L'orchestrateur detecte les services par IP sur le reseau imprimantes.
+- Adapter implemente: `prusalink` (probe HTTP endpoints communs) + fallback `http-unknown`.
+- Le binding reste `printer_id <-> printer_ip`; aucune machine n'envoie d'ID metier.
 
 Backend (`app.backend_main:app`):
 - `GET /health`
@@ -54,6 +61,7 @@ Orchestrateur edge (proxy TLS + orchestrateur):
 ```bash
 docker compose --env-file .env.orchestrateur -f compose.orchestrateur.yml up -d --build
 ```
+Dashboard orchestrateur via proxy: `https://localhost:8443/dashboard`
 
 Backend + backoffice:
 ```bash
@@ -64,3 +72,11 @@ Cette stack lance:
 - backend API: `http://localhost:8000` (ou `BACKEND_PORT`)
 - backoffice: `http://localhost:8080` (ou `BACKOFFICE_PORT`) avec proxy API sur `/api/*`
 - frontoffice placeholder: `http://localhost:8081` (ou `FRONTOFFICE_PORT`)
+
+Simulation imprimantes 3D (compose separe):
+```bash
+docker compose --env-file .env.orchestrateur -f compose.printers-sim.yml up -d --build
+```
+Pre-requis:
+- l'orchestrateur doit deja tourner pour que le reseau `fablab_imp3d_net` existe
+- les simus publient automatiquement leurs etats vers l'orchestrateur (`PRN-01..03`)

@@ -1,0 +1,41 @@
+services:
+  printer-prn01:
+    build:
+      context: .
+      dockerfile: Dockerfile.printer-sim
+    container_name: sim-printer-prn01
+    environment:
+      ORCHESTRATOR_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
+      TICK_SECONDS: ${SIM_TICK_SECONDS:-15}
+    networks:
+      - imp3d_net
+    restart: unless-stopped
+
+  printer-prn02:
+    build:
+      context: .
+      dockerfile: Dockerfile.printer-sim
+    container_name: sim-printer-prn02
+    environment:
+      ORCHESTRATOR_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
+      TICK_SECONDS: ${SIM_TICK_SECONDS:-15}
+    networks:
+      - imp3d_net
+    restart: unless-stopped
+
+  printer-prn03:
+    build:
+      context: .
+      dockerfile: Dockerfile.printer-sim
+    container_name: sim-printer-prn03
+    environment:
+      ORCHESTRATOR_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
+      TICK_SECONDS: ${SIM_TICK_SECONDS:-15}
+    networks:
+      - imp3d_net
+    restart: unless-stopped
+
+networks:
+  imp3d_net:
+    external: true
+    name: fablab_imp3d_net
