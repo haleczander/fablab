@@ -5,3 +5,6 @@ __pycache__/
 .env
 .env.orchestrateur
 deploy/certs/*.pem
+node_modules/
+.nuxt/
+.output/

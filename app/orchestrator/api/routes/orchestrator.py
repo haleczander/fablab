@@ -23,6 +23,8 @@ command_queues: dict[str, deque[dict[str, str | int]]] = defaultdict(deque)
 command_lock = Lock()
 ws_clients: set[WebSocket] = set()
 ws_lock = Lock()
+ws_machine_clients: set[WebSocket] = set()
+ws_machine_lock = Lock()
 
 
 async def _broadcast(event: str, payload: dict | list | None = None) -> None:
@@ -41,11 +43,45 @@ async def _broadcast(event: str, payload: dict | list | None = None) -> None:
                 ws_clients.discard(client)
 
 
+async def _broadcast_machines(event: str, payload: list[dict[str, str | None]]) -> None:
+    message = json.dumps({"event": event, "payload": payload})
+    with ws_machine_lock:
+        clients = list(ws_machine_clients)
+    dead: list[WebSocket] = []
+    for client in clients:
+        try:
+            await client.send_text(message)
+        except Exception:
+            dead.append(client)
+    if dead:
+        with ws_machine_lock:
+            for client in dead:
+                ws_machine_clients.discard(client)
+
+
 def _fleet_payload(session: Session) -> dict[str, list[dict[str, str | None]]]:
     return {
         "fleet": services.list_fleet(session),
         "unbound_ips": services.list_unbound_ips(session),
     }
+
+
+def _machine_states_payload(session: Session) -> list[dict[str, str | None]]:
+    states: list[dict[str, str | None]] = []
+    for row in services.list_fleet(session):
+        states.append(
+            {
+                "printer_id": row.get("printer_id"),
+                "printer_ip": row.get("printer_ip"),
+                "printer_model": row.get("printer_model"),
+                "last_heartbeat_at": row.get("last_heartbeat_at"),
+                "machine_id": row.get("printer_id"),
+                "status": row.get("status"),
+                "model": row.get("printer_model"),
+            }
+        )
+    states.sort(key=lambda item: item["machine_id"] or "")
+    return states
 
 
 @router.get("/health")
@@ -110,6 +146,7 @@ async def bind_printer(payload: BindPrinterInput, session: Session = Depends(get
     )
     await _broadcast("binding_updated", row.model_dump(mode="json"))
     await _broadcast("fleet_updated", _fleet_payload(session))
+    await _broadcast_machines("machines_updated", _machine_states_payload(session))
     return row
 
 
@@ -118,6 +155,7 @@ async def update_printer_state(printer_id: str, payload: PrinterStateInput, sess
     row = services.upsert_runtime(session, printer_id=printer_id, data=payload)
     await _broadcast("runtime_updated", row.model_dump(mode="json"))
     await _broadcast("fleet_updated", _fleet_payload(session))
+    await _broadcast_machines("machines_updated", _machine_states_payload(session))
     return row
 
 
@@ -129,6 +167,7 @@ async def ingest_device_state(payload: DeviceIngestInput, request: Request, sess
     if runtime:
         await _broadcast("runtime_updated", runtime.model_dump(mode="json"))
     await _broadcast("fleet_updated", _fleet_payload(session))
+    await _broadcast_machines("machines_updated", _machine_states_payload(session))
     return device
 
 
@@ -153,6 +192,7 @@ async def command_start_print(
     await _broadcast("command_queued", out)
     await _broadcast("runtime_updated", runtime.model_dump(mode="json"))
     await _broadcast("fleet_updated", _fleet_payload(session))
+    await _broadcast_machines("machines_updated", _machine_states_payload(session))
     return out
 
 
@@ -192,3 +232,22 @@ async def ws_events(websocket: WebSocket) -> None:
     finally:
         with ws_lock:
             ws_clients.discard(websocket)
+
+
+@router.websocket("/ws/machines")
+async def ws_machines(websocket: WebSocket) -> None:
+    await websocket.accept()
+    with ws_machine_lock:
+        ws_machine_clients.add(websocket)
+    try:
+        with Session(engine) as session:
+            snapshot = _machine_states_payload(session)
+        await websocket.send_text(json.dumps({"event": "machines_snapshot", "payload": snapshot}))
+        while True:
+            if await websocket.receive_text() == "ping":
+                await websocket.send_text(json.dumps({"event": "pong", "payload": None}))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        with ws_machine_lock:
+            ws_machine_clients.discard(websocket)

@@ -1,0 +1,13 @@
+{
+  "name": "fablab-frontoffice",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --host 0.0.0.0 --port 3000",
+    "build": "nuxt build",
+    "preview": "nuxt preview --host 0.0.0.0 --port 3000"
+  },
+  "dependencies": {
+    "nuxt": "^3.17.7"
+  }
+}

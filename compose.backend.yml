@@ -10,36 +10,42 @@ services:
       APP_MODULE: app.backend_main:app
       APP_PORT: 8000
       BACKEND_DATABASE_URL: ${BACKEND_DATABASE_URL:-sqlite:////data/backend.db}
+      ORCHESTRATOR_INTERNAL_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - backend_data:/data
     networks:
       - platform_net
+      - edge_net
     restart: unless-stopped
 
   backoffice:
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      dockerfile: web/backoffice/Dockerfile
     container_name: fablab-backoffice
     depends_on:
       - backend
+    environment:
+      NUXT_PUBLIC_BACKEND_BASE: ${BACKEND_PUBLIC_URL:-http://localhost:8000}
     ports:
-      - "${BACKOFFICE_PORT:-8080}:80"
-    volumes:
-      - ./deploy/backoffice/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./deploy/backoffice/index.html:/usr/share/nginx/html/index.html:ro
+      - "${BACKOFFICE_PORT:-8080}:3000"
     networks:
       - platform_net
     restart: unless-stopped
 
   frontoffice:
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      dockerfile: web/frontoffice/Dockerfile
     container_name: fablab-frontoffice
+    depends_on:
+      - backend
+    environment:
+      NUXT_PUBLIC_BACKEND_BASE: ${BACKEND_PUBLIC_URL:-http://localhost:8000}
     ports:
-      - "${FRONTOFFICE_PORT:-8081}:80"
-    volumes:
-      - ./deploy/frontoffice/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./deploy/frontoffice/index.html:/usr/share/nginx/html/index.html:ro
+      - "${FRONTOFFICE_PORT:-8081}:3000"
     networks:
       - platform_net
     restart: unless-stopped
@@ -50,3 +56,6 @@ volumes:
 networks:
   platform_net:
     driver: bridge
+  edge_net:
+    external: true
+    name: fablab_edge_net

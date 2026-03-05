@@ -1,0 +1,17 @@
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY web/backoffice/package.json ./package.json
+RUN npm install --no-audit --no-fund
+
+COPY web/backoffice/ ./
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=build /app/.output ./.output
+
+EXPOSE 3000
+CMD ["node", ".output/server/index.mjs"]

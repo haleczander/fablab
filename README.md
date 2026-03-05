@@ -1,33 +1,19 @@
 # Fablab Fleet Stack
 
-Projet compose de 2 services applicatifs:
+Projet compose de 3 services applicatifs:
 - `orchestrateur local` (edge, parle aux imprimantes)
-- `backend + backoffice` (source de verite + UI operateur)
+- `backend API` (source de verite metier)
+- `backoffice/frontoffice` (apps Nuxt separees)
 
 ## Doctrine
 - identifiant metier unique: `printer_id` (ex: `PRN-01`)
 - IP imprimante uniquement pour mapping interne orchestrateur
 - backend = source de verite (jobs, historique, registry)
 - orchestrateur = agent d'execution tolerant aux coupures reseau
+- fronts = clients web, sans logique metier backend
 
-## Endpoints principaux
-Orchestrateur (`app.main:app`):
-- `GET /health`
-- `GET /printers`
-- `GET /printer-bindings`
-- `POST /printer-bindings`
-- `POST /printers/{printer_id}/state`
-- `POST /devices/state-ingest`
-- `POST /printers/{printer_id}/jobs/poll-once`
-- `GET /dashboard` (UI supervision orchestrateur)
-- `POST /discovery/scan` (scan CIDR + detection adapter/modele)
-
-## Adapters Orchestrateur
-- L'orchestrateur detecte les services par IP sur le reseau imprimantes.
-- Adapter implemente: `prusalink` (probe HTTP endpoints communs) + fallback `http-unknown`.
-- Le binding reste `printer_id <-> printer_ip`; aucune machine n'envoie d'ID metier.
-
-Backend (`app.backend_main:app`):
+## Endpoints backend
+Backend API (`app.backend_main:app`):
 - `GET /health`
 - `GET /printers`
 - `POST /printers/register`
@@ -36,7 +22,12 @@ Backend (`app.backend_main:app`):
 - `GET /jobs`
 - `POST /jobs`
 - `POST /jobs/{job_id}/progress`
-- `GET /backoffice` (UI)
+- `GET /ws/printers` (WebSocket)
+
+## Stack front (debutant)
+- `Nuxt 3` choisi pour les 2 fronts (base Vue, prise en main simple).
+- Backoffice: `web/backoffice`
+- Frontoffice: `web/frontoffice`
 
 ## Lancer en local
 ```bash
@@ -51,9 +42,22 @@ Orchestrateur:
 uvicorn app.main:app --reload --port 8001
 ```
 
-Backend + backoffice:
+Backend API:
 ```bash
 uvicorn app.backend_main:app --reload --port 8000
+```
+
+Nuxt local (optionnel, hors Docker):
+```bash
+cd web/backoffice
+npm install
+npm run dev
+```
+
+```bash
+cd web/frontoffice
+npm install
+npm run dev
 ```
 
 ## Docker
@@ -63,15 +67,19 @@ docker compose --env-file .env.orchestrateur -f compose.orchestrateur.yml up -d 
 ```
 Dashboard orchestrateur via proxy: `https://localhost:8443/dashboard`
 
-Backend + backoffice:
+Backend API + backoffice + frontoffice:
 ```bash
 docker compose --env-file .env.orchestrateur -f compose.backend.yml up -d --build
 ```
 
 Cette stack lance:
 - backend API: `http://localhost:8000` (ou `BACKEND_PORT`)
-- backoffice: `http://localhost:8080` (ou `BACKOFFICE_PORT`) avec proxy API sur `/api/*`
-- frontoffice placeholder: `http://localhost:8081` (ou `FRONTOFFICE_PORT`)
+- backoffice Nuxt: `http://localhost:8080` (ou `BACKOFFICE_PORT`)
+- frontoffice Nuxt: `http://localhost:8081` (ou `FRONTOFFICE_PORT`)
+
+## Notes frontoffice
+- Le frontoffice utilise surtout le flux `ws://<backend>/ws/printers` pour l'etat des machines.
+- Fallback en polling `GET /printers` si le WebSocket n'est pas disponible.
 
 Simulation imprimantes 3D (compose separe):
 ```bash
