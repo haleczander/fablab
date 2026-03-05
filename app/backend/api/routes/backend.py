@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlmodel import Session
 
 from app.backend.application import services
@@ -9,9 +11,23 @@ from app.backend.domain.schemas import (
     PrinterStateReportInput,
     RegisterPrinterInput,
 )
-from app.backend.infrastructure.db import get_session
+from app.backend.infrastructure.db import engine, get_session
 
 router = APIRouter(tags=["backend-api"])
+ws_clients: set[WebSocket] = set()
+
+
+async def _broadcast(event: str, payload: dict | list | None = None) -> None:
+    message = json.dumps({"event": event, "payload": payload})
+    clients = list(ws_clients)
+    dead: list[WebSocket] = []
+    for client in clients:
+        try:
+            await client.send_text(message)
+        except Exception:
+            dead.append(client)
+    for client in dead:
+        ws_clients.discard(client)
 
 
 @router.get("/health")
@@ -25,8 +41,10 @@ def list_printers(session: Session = Depends(get_session)) -> list[BackendPrinte
 
 
 @router.post("/printers/register", response_model=BackendPrinter)
-def register_printer(payload: RegisterPrinterInput, session: Session = Depends(get_session)) -> BackendPrinter:
-    return services.register_printer(session, payload.printer_id)
+async def register_printer(payload: RegisterPrinterInput, session: Session = Depends(get_session)) -> BackendPrinter:
+    row = services.register_printer(session, payload.printer_id)
+    await _broadcast("printer_registered", row.model_dump(mode="json"))
+    return row
 
 
 @router.get("/printers/{printer_id}/next-job")
@@ -35,12 +53,31 @@ def next_job(printer_id: str, session: Session = Depends(get_session)) -> dict |
 
 
 @router.post("/printers/{printer_id}/state", response_model=BackendPrinter)
-def report_printer_state(
+async def report_printer_state(
     printer_id: str,
     payload: PrinterStateReportInput,
     session: Session = Depends(get_session),
 ) -> BackendPrinter:
-    return services.upsert_printer_state(session, printer_id, payload)
+    row = services.upsert_printer_state(session, printer_id, payload)
+    await _broadcast("printer_state", row.model_dump(mode="json"))
+    return row
+
+
+@router.websocket("/ws/printers")
+async def ws_printers(websocket: WebSocket) -> None:
+    await websocket.accept()
+    ws_clients.add(websocket)
+    try:
+        with Session(engine) as session:
+            snapshot = [p.model_dump(mode="json") for p in services.list_printers(session)]
+        await websocket.send_text(json.dumps({"event": "snapshot", "payload": snapshot}))
+        while True:
+            if await websocket.receive_text() == "ping":
+                await websocket.send_text(json.dumps({"event": "pong", "payload": None}))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        ws_clients.discard(websocket)
 
 
 @router.get("/jobs", response_model=list[BackendJob])

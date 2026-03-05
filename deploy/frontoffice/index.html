@@ -3,42 +3,463 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Fablab Frontoffice</title>
+  <title>FabLab JUNIA ISEN</title>
   <style>
-    :root { --text:#0f172a; --tone:#1d4ed8; }
+    :root {
+      --junia-primary: #3f2a56;
+      --junia-accent: #f06b42;
+      --junia-soft: #fff2ee;
+      --text-main: #221c2c;
+      --text-muted: #625a6e;
+      --surface: #ffffff;
+      --line: #e4deec;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      font-family: "Segoe UI", Tahoma, sans-serif;
-      color: var(--text);
-      background: linear-gradient(135deg, #eff6ff, #dbeafe);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      color: var(--text-main);
+      background:
+        radial-gradient(circle at 90% 0%, rgba(240, 107, 66, 0.16), transparent 35%),
+        radial-gradient(circle at 0% 0%, rgba(63, 42, 86, 0.12), transparent 28%),
+        #f8f6fb;
     }
-    .panel {
-      width: min(720px, 92vw);
-      background: #ffffff;
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 10px 30px rgba(29, 78, 216, 0.15);
+
+    .wrap {
+      width: min(1120px, 92vw);
+      margin: 0 auto;
+      padding: 28px 0 48px;
     }
-    h1 { margin-top: 0; }
-    p { line-height: 1.5; }
-    .badge {
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .brand {
       display: inline-block;
-      padding: 4px 10px;
+      padding: 8px 12px;
       border-radius: 999px;
-      background: #dbeafe;
-      color: var(--tone);
+      background: rgba(63, 42, 86, 0.1);
+      color: var(--junia-primary);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 12px;
+    }
+
+    .hero {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 14px 34px rgba(63, 42, 86, 0.08);
+      margin-bottom: 18px;
+      animation: rise 0.6s ease;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.06;
+      color: var(--junia-primary);
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.55;
+      color: var(--text-muted);
+    }
+
+    .tagline {
+      margin-bottom: 16px;
+      max-width: 72ch;
+    }
+
+    .hero-kpis {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .kpi {
+      background: linear-gradient(145deg, #f6f2fb, #fff);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .kpi strong {
+      display: block;
+      font-size: 20px;
+      color: var(--junia-primary);
+      line-height: 1;
+      margin-bottom: 5px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      animation: rise 0.7s ease;
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 20px;
+      color: var(--junia-primary);
+    }
+
+    .activities {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .tile {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .tile h3 {
+      margin: 0 0 6px;
+      font-size: 15px;
+      color: var(--text-main);
+    }
+
+    .models {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .model {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--junia-accent);
+      border-radius: 10px;
+      padding: 10px 10px 10px 12px;
+      background: #fff;
+    }
+
+    .model strong {
+      font-size: 14px;
+      color: var(--text-main);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .model-stats {
+      font-size: 13px;
+      color: var(--text-muted);
       font-weight: 600;
+    }
+
+    .muted {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .faq {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 9px 12px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--junia-primary);
+    }
+
+    details p {
+      margin-top: 8px;
+      font-size: 14px;
+    }
+
+    .cta {
+      margin-top: 14px;
+      display: inline-block;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: var(--junia-accent);
+      color: #fff;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+
+    .cta:hover {
+      transform: translateY(-1px);
+      filter: brightness(0.96);
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .activities {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-kpis {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <section class="panel">
-    <span class="badge">Placeholder</span>
-    <h1>Frontoffice</h1>
-    <p>Ce service est en place, mais l'interface n'est pas encore developpee.</p>
-  </section>
+  <main class="wrap">
+    <header>
+      <span class="brand">FabLab JUNIA ISEN</span>
+      <a class="cta" href="#faq">Voir la FAQ</a>
+    </header>
+
+    <section class="hero">
+      <h1>FabLab de l'ecole<br/>JUNIA ISEN</h1>
+      <p class="tagline">
+        Prototyper, apprendre, reparer et valoriser les projets de l'ecole.
+        Le FabLab met a disposition des machines connectees, des ressources techniques et un accompagnement pour les etudiants, les enseignants et les partenaires.
+      </p>
+      <div class="hero-kpis">
+        <article class="kpi">
+          <strong>Imprimantes 3D</strong>
+          <p>Parc connecte et suivi en temps reel via le reseau FabLab.</p>
+        </article>
+        <article class="kpi">
+          <strong>Ateliers</strong>
+          <p>Initiation, conception, prototypage et bonnes pratiques.</p>
+        </article>
+        <article class="kpi">
+          <strong>Support interne</strong>
+          <p>Reparation de materiel, aide technique et besoins com.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Activites du FabLab</h2>
+        <p>
+          Christophe pilote les activites de fabrication et de support: impression 3D, maintenance, petites reparations pour les equipes pedagogiques, et realisations internes pour la communication.
+        </p>
+        <div class="activities">
+          <article class="tile">
+            <h3>Fabrication & prototypage</h3>
+            <p>Conception de pieces, tests de faisabilite et production rapide.</p>
+          </article>
+          <article class="tile">
+            <h3>Maintenance machines</h3>
+            <p>Diagnostic de panne, remise en etat, suivi des indisponibilites.</p>
+          </article>
+          <article class="tile">
+            <h3>Demandes internes</h3>
+            <p>Interventions pour enseignants et services de l'ecole.</p>
+          </article>
+          <article class="tile">
+            <h3>Valorisation des projets</h3>
+            <p>Mise en avant des realisations et de l'impact du FabLab.</p>
+          </article>
+        </div>
+      </article>
+
+      <aside class="card">
+        <h2>Etat des machines</h2>
+        <p>Vue simplifiee par modele depuis l'API backend.</p>
+        <div class="models" id="modelsContainer"></div>
+        <p class="muted" id="modelsMeta">Chargement...</p>
+      </aside>
+    </section>
+
+    <section class="card" id="faq">
+      <h2>FAQ rapide</h2>
+      <div class="faq">
+        <details>
+          <summary>Comment signaler une machine en panne ?</summary>
+          <p>Scanne le QR code de la machine puis utilise le formulaire de signalement lie a son identifiant metier.</p>
+        </details>
+        <details>
+          <summary>Qui peut utiliser le FabLab ?</summary>
+          <p>Etudiants, enseignants et equipes internes de JUNIA ISEN selon les regles d'acces et les creneaux disponibles.</p>
+        </details>
+        <details>
+          <summary>Que contient le suivi des interventions ?</summary>
+          <p>Client interne, objet concerne, besoin, estimation externe, temps investi et cout engage.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+  <script>
+    const modelsContainer = document.getElementById("modelsContainer");
+    const modelsMeta = document.getElementById("modelsMeta");
+    let printersState = [];
+    let pollTimer = null;
+
+    function classifyStatus(status) {
+      const s = String(status || "").toUpperCase();
+      if (s === "PRINTING" || s === "RUNNING") return "en_cours";
+      if (s === "IN_USE" || s === "BUSY") return "utilise";
+      if (s === "IDLE" || s === "ON" || s === "READY" || s === "AVAILABLE") return "dispo";
+      return "utilise";
+    }
+
+    function getModelName(printer) {
+      return printer.modele || printer.model || printer.printer_model || "Modele non renseigne";
+    }
+
+    function buildGroups(printers) {
+      const groups = {};
+      for (const printer of printers) {
+        const modelName = getModelName(printer);
+        if (!groups[modelName]) groups[modelName] = { dispo: 0, utilise: 0, en_cours: 0 };
+        const bucket = classifyStatus(printer.status);
+        groups[modelName][bucket] += 1;
+      }
+      return groups;
+    }
+
+    function renderGroups(groups) {
+      const entries = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+      if (!entries.length) {
+        modelsContainer.innerHTML = '<p class="muted">Aucune machine enregistree.</p>';
+        return;
+      }
+      const escapeHtml = (value) => String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+      modelsContainer.innerHTML = entries.map(([modelName, counts]) => (
+        '<article class="model">' +
+          `<strong>${escapeHtml(modelName)}</strong>` +
+          `<p class="model-stats">Dispo: ${counts.dispo} | Utilise: ${counts.utilise} | En cours: ${counts.en_cours}</p>` +
+        '</article>'
+      )).join("");
+    }
+
+    function renderFromPrinters(printers) {
+      renderGroups(buildGroups(printers));
+      modelsMeta.textContent = `Derniere mise a jour: ${new Date().toLocaleTimeString("fr-FR")}`;
+    }
+
+    function upsertPrinter(printer) {
+      const key = printer.printer_id || `id-${printer.id}`;
+      const index = printersState.findIndex((p) => (p.printer_id || `id-${p.id}`) === key);
+      if (index >= 0) {
+        printersState[index] = printer;
+      } else {
+        printersState.push(printer);
+      }
+      renderFromPrinters(printersState);
+    }
+
+    async function refreshModels() {
+      try {
+        const res = await fetch("/api/printers", { headers: { "Accept": "application/json" } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const printers = await res.json();
+        if (!Array.isArray(printers)) throw new Error("payload invalide");
+        printersState = printers;
+        renderFromPrinters(printersState);
+      } catch (err) {
+        modelsContainer.innerHTML = "";
+        modelsMeta.textContent = "API backend indisponible.";
+      }
+    }
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollTimer = setInterval(refreshModels, 15000);
+    }
+
+    function stopPolling() {
+      if (!pollTimer) return;
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+
+    function connectWs() {
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${proto}://${location.host}/api/ws/printers`);
+      let pingTimer = null;
+
+      ws.onopen = () => {
+        stopPolling();
+        modelsMeta.textContent = "Temps reel actif (WebSocket).";
+        pingTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+        }, 25000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.event === "snapshot" && Array.isArray(message.payload)) {
+            printersState = message.payload;
+            renderFromPrinters(printersState);
+            return;
+          }
+          if ((message.event === "printer_state" || message.event === "printer_registered") && message.payload) {
+            upsertPrinter(message.payload);
+          }
+        } catch (err) {
+          modelsMeta.textContent = "Flux temps reel invalide, fallback API.";
+        }
+      };
+
+      ws.onclose = () => {
+        if (pingTimer) clearInterval(pingTimer);
+        startPolling();
+        modelsMeta.textContent = "Temps reel coupe, fallback API.";
+        setTimeout(connectWs, 1500);
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    }
+
+    refreshModels();
+    startPolling();
+    connectWs();
+  </script>
 </body>
 </html>
