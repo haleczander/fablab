@@ -4,17 +4,17 @@ language: fr
 
 ia_coding_contract:
   objective: >
-    Eviter les répétitions de consignes et imposer un standard de conception/implémentation.
+    Eviter les repetitions de consignes et imposer un standard de conception/implementation.
 
   mandatory_rules:
     - id: arch-clean-when-complex
       rule: "Si un service est complexe, utiliser Clean Architecture."
       details:
-        - "Séparer: controller/api, application(use_cases), domain, infrastructure(persistence/adapters)."
-        - "Dépendances dirigées vers le domaine (pas l'inverse)."
+        - "Separer: controller/api, application(use_cases), domain, infrastructure(persistence/adapters)."
+        - "Dependances dirigees vers le domaine (pas l'inverse)."
 
     - id: one-file-one-business-object
-      rule: "Un fichier = un objet métier principal."
+      rule: "Un fichier = un objet metier principal."
       examples:
         - "un controller par fichier"
         - "un service par fichier"
@@ -24,33 +24,41 @@ ia_coding_contract:
     - id: use-case-single-action
       rule: "Un use case ne fait qu'une seule chose."
       constraints:
-        - "Une responsabilité claire."
-        - "Pas de logique transverse non liée."
-        - "Composer plusieurs use cases plutôt que les fusionner."
+        - "Une responsabilite claire."
+        - "Pas de logique transverse non liee."
+        - "Composer plusieurs use cases plutot que les fusionner."
+
+    - id: use-case-called-by-entrypoint
+      rule: "Un use case est appele directement par un point d'entree (controller/api/worker), jamais depuis un adapter infrastructure."
+      constraints:
+        - "Pas de chainage controller -> service infra -> use case."
+        - "Le controller (ou worker d'entree) orchestre les use cases."
+        - "L'infrastructure fournit des adapters/ports, elle ne pilote pas l'application."
 
     - id: code-dry-simple
       rule: "Code le plus DRY et simple possible."
       constraints:
-        - "Extraire les duplications évidentes."
-        - "Privilégier la lisibilité à l'astuce."
-        - "Éviter la complexité prématurée (YAGNI)."
+        - "Extraire les duplications evidentes."
+        - "Privilegier la lisibilite a l'astuce."
+        - "Eviter la complexite prematuree (YAGNI)."
 
     - id: no-polling
       rule: "Polling interdit."
       requirements:
-        - "Utiliser WebSocket (ou events push) pour le temps réel."
+        - "Utiliser WebSocket (ou events push) pour le temps reel."
         - "Le front ne doit pas faire de boucle de refresh HTTP."
 
   delivery_checklist:
-    - "Architecture respectée si complexité non triviale."
-    - "Découpage fichier/objet respecté."
+    - "Architecture respectee si complexite non triviale."
+    - "Decoupage fichier/objet respecte."
     - "Use cases atomiques."
-    - "Aucune duplication non justifiée."
+    - "Aucune duplication non justifiee."
     - "Aucun polling; WS/events en place."
 
   pr_review_policy:
     block_if:
       - "Nouveau polling introduit."
-      - "Use case multi-responsabilités."
-      - "Mélange domain/infrastructure dans le même composant."
-      - "Fichier fourre-tout sans séparation claire."
+      - "Use case multi-responsabilites."
+      - "Melange domain/infrastructure dans le meme composant."
+      - "Fichier fourre-tout sans separation claire."
+      - "Use case appele depuis une couche infrastructure intermediaire."

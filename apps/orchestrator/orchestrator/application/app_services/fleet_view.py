@@ -91,22 +91,64 @@ class FleetViewService:
 
     def machine_states_payload(self) -> list[dict[str, str | None]]:
         payload: list[dict[str, str | None]] = []
-        for row in self.list_fleet():
+        for device in self.device_runtime_repo.list_all():
+            if device.is_ignored:
+                continue
+
+            binding = None
+            if device.device_serial:
+                binding = self.binding_repo.get_by_serial(device.device_serial)
+            if not binding and device.device_mac:
+                binding = self.binding_repo.get_by_mac(device.device_mac)
+            if not binding and device.device_ip:
+                binding = self.binding_repo.get_by_ip(device.device_ip)
+
+            printer_id = binding.printer_id if binding else None
+            live = get_machine_state(printer_id) if printer_id else None
+            machine_id = printer_id or device.device_serial or device.device_mac or device.device_ip
+
+            status = live.get("status") if live and live.get("status") is not None else device.status
+            current_job_id = (
+                live.get("current_job_id")
+                if live and live.get("current_job_id") is not None
+                else device.current_job_id
+            )
+            progress_pct = (
+                live.get("progress_pct")
+                if live and live.get("progress_pct") is not None
+                else device.progress_pct
+            )
+            nozzle_temp_c = (
+                live.get("nozzle_temp_c")
+                if live and live.get("nozzle_temp_c") is not None
+                else device.nozzle_temp_c
+            )
+            bed_temp_c = (
+                live.get("bed_temp_c")
+                if live and live.get("bed_temp_c") is not None
+                else device.bed_temp_c
+            )
+            last_heartbeat_at = (
+                live.get("last_heartbeat_at")
+                if live and live.get("last_heartbeat_at") is not None
+                else (device.last_heartbeat_at.isoformat() if device.last_heartbeat_at else None)
+            )
+
             payload.append(
                 {
-                    "printer_id": row.get("printer_id"),
-                    "printer_ip": row.get("printer_ip"),
-                    "printer_mac": row.get("printer_mac"),
-                    "printer_serial": row.get("printer_serial"),
-                    "printer_model": row.get("printer_model"),
-                    "last_heartbeat_at": row.get("last_heartbeat_at"),
-                    "machine_id": row.get("printer_id"),
-                    "status": row.get("status"),
-                    "current_job_id": row.get("current_job_id"),
-                    "progress_pct": row.get("progress_pct"),
-                    "nozzle_temp_c": row.get("nozzle_temp_c"),
-                    "bed_temp_c": row.get("bed_temp_c"),
-                    "model": row.get("printer_model"),
+                    "printer_id": printer_id,
+                    "printer_ip": (binding.printer_ip if binding else None) or device.last_printer_ip or device.device_ip,
+                    "printer_mac": (binding.printer_mac if binding else None) or device.last_printer_mac or device.device_mac,
+                    "printer_serial": (binding.printer_serial if binding else None) or device.last_printer_serial or device.device_serial,
+                    "printer_model": (binding.printer_model if binding else None) or device.detected_model,
+                    "last_heartbeat_at": str(last_heartbeat_at) if last_heartbeat_at is not None else None,
+                    "machine_id": machine_id,
+                    "status": str(status) if status is not None else None,
+                    "current_job_id": str(current_job_id) if current_job_id is not None else None,
+                    "progress_pct": str(progress_pct) if progress_pct is not None else None,
+                    "nozzle_temp_c": str(nozzle_temp_c) if nozzle_temp_c is not None else None,
+                    "bed_temp_c": str(bed_temp_c) if bed_temp_c is not None else None,
+                    "model": (binding.printer_model if binding else None) or device.detected_model,
                 }
             )
         payload.sort(key=lambda item: item["machine_id"] or "")

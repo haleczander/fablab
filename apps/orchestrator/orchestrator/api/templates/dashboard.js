@@ -1,5 +1,14 @@
 async function api(path, opts = {}) {
-  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  const { timeout_ms, ...fetchOpts } = opts;
+  const timeoutMs = Number(timeout_ms) || 0;
+  const controller = timeoutMs > 0 ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  const r = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...fetchOpts,
+    ...(controller ? { signal: controller.signal } : {}),
+  });
+  if (timeout) clearTimeout(timeout);
   if (!r.ok) {
     let t = "";
     try { t = await r.text(); } catch (_) { t = r.statusText; }
@@ -11,6 +20,7 @@ async function api(path, opts = {}) {
 
 let latestRows = [];
 const machineStateByPrinter = new Map();
+let showAllAvailable = true;
 
 function fmt(v) {
   return (v === null || v === undefined || v === "") ? "-" : String(v);
@@ -25,7 +35,12 @@ function hasSupportedContract(adapter) {
 }
 
 function esc(v) {
-  return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function statusColor(status) {
@@ -39,6 +54,22 @@ function statusColor(status) {
 function canIgnoreDevice(row) {
   // Ne pas proposer "Pas une machine" si deja binde ET contrat d'interface supporte.
   return !(Boolean(row.is_bound) && hasSupportedContract(row.detected_adapter));
+}
+
+function isIgnoredDevice(row) {
+  return Boolean(row?.is_ignored);
+}
+
+function syncShowAllButton() {
+  const btn = document.getElementById("showAllBtn");
+  if (!btn) return;
+  btn.textContent = showAllAvailable ? "Masquer non machines" : "Tout voir";
+}
+
+function toggleShowAllAvailable() {
+  showAllAvailable = !showAllAvailable;
+  syncShowAllButton();
+  renderDevices(latestRows);
 }
 
 function isActiveStatus(status) {
@@ -97,7 +128,7 @@ function renderOngoingJobs(rows) {
   }).join("");
 }
 
-async function saveBinding(mac, rowId, msgId) {
+async function saveBinding(mac, rowId, msgId, deviceIp = "", deviceSerial = "", detectedAdapter = "") {
   const pid = document.getElementById(`pid-${rowId}`).value.trim();
   const modelInput = document.getElementById(`model-${rowId}`);
   const model = modelInput ? modelInput.value.trim() : "";
@@ -109,7 +140,14 @@ async function saveBinding(mac, rowId, msgId) {
   try {
     await api("/printer-bindings", {
       method: "POST",
-      body: JSON.stringify({ printer_id: pid, printer_mac: mac, printer_model: model || null }),
+      body: JSON.stringify({
+        printer_id: pid,
+        printer_mac: mac,
+        printer_ip: deviceIp || null,
+        printer_serial: deviceSerial || null,
+        printer_model: model || null,
+        adapter_name: detectedAdapter || null,
+      }),
     });
     msg.textContent = "OK";
   } catch (e) {
@@ -117,27 +155,100 @@ async function saveBinding(mac, rowId, msgId) {
   }
 }
 
-async function setIgnored(deviceId, isIgnored, msgId) {
+async function setIgnored(deviceId, deviceMac, deviceIp, deviceSerial, detectedAdapter, detectedModel, isIgnored, msgId) {
   const msg = document.getElementById(msgId);
-  if (!deviceId) {
-    msg.textContent = "device_id manquant";
-    return;
-  }
   try {
-    await api(`/devices/${deviceId}/ignored`, {
-      method: "PATCH",
-      body: JSON.stringify({ is_ignored: isIgnored }),
-    });
+    if (deviceId) {
+      await api(`/devices/${deviceId}/ignored`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_ignored: isIgnored }),
+      });
+    } else {
+      await api("/devices/ignored/by-mac", {
+        method: "POST",
+        body: JSON.stringify({
+          device_mac: deviceMac,
+          device_ip: deviceIp,
+          device_serial: deviceSerial || null,
+          detected_adapter: detectedAdapter || null,
+          detected_model: detectedModel || null,
+          is_ignored: isIgnored,
+        }),
+      });
+    }
     msg.textContent = isIgnored ? "Device masque" : "Device restaure";
   } catch (e) {
     msg.textContent = e.message;
   }
 }
 
+async function deleteBinding(printerId, msgId) {
+  const msg = document.getElementById(msgId);
+  const pid = String(printerId || "").trim();
+  if (!pid) {
+    msg.textContent = "printer_id manquant";
+    return;
+  }
+  try {
+    await api(`/printer-bindings/${encodeURIComponent(pid)}`, { method: "DELETE" });
+    msg.textContent = `Binding supprime: ${pid}`;
+  } catch (e) {
+    msg.textContent = e.message;
+  }
+}
+
+async function refreshNetworkDiscovery() {
+  const msg = document.getElementById("scanMsg");
+  const btn = document.getElementById("scanBtn");
+  const progressWrap = document.getElementById("scanProgress");
+  let timer = null;
+  const startedAt = Date.now();
+
+  if (msg) msg.className = "scan-msg run";
+  if (btn) btn.disabled = true;
+  if (progressWrap) progressWrap.classList.remove("hidden");
+  if (progressWrap) progressWrap.classList.add("indeterminate");
+  if (msg) msg.textContent = "Scan reseau en cours...";
+
+  timer = setInterval(() => {
+    const tookS = ((Date.now() - startedAt) / 1000).toFixed(0);
+    if (msg) msg.textContent = `Scan reseau en cours... ${tookS}s`;
+  }, 1000);
+
+  try {
+    const out = await api("/discovery/refresh", { method: "POST", timeout_ms: 300000 });
+    const updated = Number(out?.updated) || 0;
+    const tookMs = Date.now() - startedAt;
+    const tookS = (tookMs / 1000).toFixed(1);
+    const stamp = new Date().toLocaleTimeString("fr-FR");
+    if (timer) clearInterval(timer);
+    if (msg) {
+      msg.className = "scan-msg ok";
+      msg.textContent = `Scan termine: ${updated} maj en ${tookS}s (${stamp})`;
+    }
+  } catch (e) {
+    if (timer) clearInterval(timer);
+    if (msg) {
+      msg.className = "scan-msg err";
+      const reason = e instanceof Error && e.name === "AbortError"
+        ? "timeout (scan trop long)"
+        : (e instanceof Error ? e.message : "Erreur");
+      msg.textContent = `Scan en erreur: ${reason}`;
+    }
+  } finally {
+    setTimeout(() => {
+      if (progressWrap) progressWrap.classList.remove("indeterminate");
+      if (progressWrap) progressWrap.classList.add("hidden");
+      if (btn) btn.disabled = false;
+    }, 4000);
+  }
+}
+
 function renderDevices(rows) {
   latestRows = Array.isArray(rows) ? rows : [];
   renderOngoingJobs(rows);
-  const available = (rows || []).filter((d) => !d.is_bound);
+  const availableAll = (rows || []).filter((d) => !d.is_bound);
+  const available = showAllAvailable ? availableAll : availableAll.filter((d) => !isIgnoredDevice(d));
   const bound = (rows || []).filter((d) => d.is_bound);
   const modelSet = new Set(["MK3S", "MK4", "MK4S", "XL", "MINI+"]);
 
@@ -155,11 +266,16 @@ function renderDevices(rows) {
   document.querySelector("#availableTable tbody").innerHTML = available.map((d, idx) => {
     const rowId = `a-${idx}`;
     const hasMac = Boolean(d.device_mac);
-    const dotClass = statusColor(d.status);
-    const stateTitle = `Etat: ${fmt(d.status)} | Dernier ping: ${fmt(d.last_heartbeat_at)}`;
+    const live = machineStateByPrinter.get(String(d.printer_id || "")) || {};
+    const status = live.status || d.status;
+    const hb = live.last_heartbeat_at || d.last_heartbeat_at;
+    const dotClass = statusColor(status);
+    const stateTitle = `Etat: ${fmt(status)} | Dernier ping: ${fmt(hb)}`;
     const networkTitle = `IP: ${fmt(d.device_ip)} | MAC: ${fmt(d.device_mac)} | Serial: ${fmt(d.device_serial)}`;
     const ignoreBtn = canIgnoreDevice(d)
-      ? `<button class="btn-secondary" onclick="setIgnored(${Number(d.device_id) || 0}, true, 'availMsg')">Pas une machine</button>`
+      ? (isIgnoredDevice(d)
+          ? `<button class="btn-secondary" onclick="setIgnored(${Number(d.device_id) || 0}, '${esc(d.device_mac || "")}', '${esc(d.device_ip || "")}', '${esc(d.device_serial || "")}', '${esc(d.detected_adapter || "")}', '${esc(d.detected_model || "")}', false, 'availMsg')">Reafficher</button>`
+          : `<button class="btn-secondary" onclick="setIgnored(${Number(d.device_id) || 0}, '${esc(d.device_mac || "")}', '${esc(d.device_ip || "")}', '${esc(d.device_serial || "")}', '${esc(d.detected_adapter || "")}', '${esc(d.detected_model || "")}', true, 'availMsg')">Pas une machine</button>`)
       : "";
     return `
     <tr>
@@ -179,7 +295,8 @@ function renderDevices(rows) {
       </td>
       <td>
         <div class="actions">
-          <button ${hasMac ? "" : "disabled"} onclick="saveBinding('${esc(d.device_mac || "")}', '${rowId}', 'availMsg')">Binder</button>
+          <button ${hasMac ? "" : "disabled"} onclick="saveBinding('${esc(d.device_mac || "")}', '${rowId}', 'availMsg', '${esc(d.device_ip || "")}', '${esc(d.device_serial || "")}', '${esc(d.detected_adapter || "")}')">Binder</button>
+          ${isIgnoredDevice(d) ? '<span class="chip-muted">non machine</span>' : ""}
           ${ignoreBtn}
         </div>
       </td>
@@ -188,12 +305,16 @@ function renderDevices(rows) {
 
   document.querySelector("#boundTable tbody").innerHTML = bound.map((d, idx) => {
     const rowId = `b-${idx}`;
-    const dotClass = statusColor(d.status);
-    const title = `Etat: ${fmt(d.status)} | Dernier ping: ${fmt(d.last_heartbeat_at)}`;
+    const live = machineStateByPrinter.get(String(d.printer_id || "")) || {};
+    const status = live.status || d.status;
+    const hb = live.last_heartbeat_at || d.last_heartbeat_at;
+    const dotClass = statusColor(status);
+    const title = `Etat: ${fmt(status)} | Dernier ping: ${fmt(hb)}`;
     const networkTitle = `IP: ${fmt(d.device_ip)} | MAC: ${fmt(d.device_mac)} | Serial: ${fmt(d.device_serial)}`;
     const ignoreBtn = canIgnoreDevice(d)
-      ? `<button class="btn-secondary" onclick="setIgnored(${Number(d.device_id) || 0}, true, 'boundMsg')">Pas une machine</button>`
+      ? `<button class="btn-secondary" onclick="setIgnored(${Number(d.device_id) || 0}, '${esc(d.device_mac || "")}', '${esc(d.device_ip || "")}', '${esc(d.device_serial || "")}', '${esc(d.detected_adapter || "")}', '${esc(d.detected_model || "")}', true, 'boundMsg')">Pas une machine</button>`
       : "";
+    const printerId = String(d.printer_id || "");
     return `
     <tr>
       <td class="dot-col">
@@ -212,7 +333,8 @@ function renderDevices(rows) {
       </td>
       <td>
         <div class="actions">
-          <button onclick="saveBinding('${esc(d.device_mac || "")}', '${rowId}', 'boundMsg')">Sauver</button>
+          <button onclick="saveBinding('${esc(d.device_mac || "")}', '${rowId}', 'boundMsg', '${esc(d.device_ip || "")}', '${esc(d.device_serial || "")}', '${esc(d.detected_adapter || "")}')">Sauver</button>
+          <button class="btn-danger" ${printerId ? "" : "disabled"} onclick="deleteBinding('${esc(printerId)}', 'boundMsg')">Supprimer binding</button>
           ${ignoreBtn}
         </div>
       </td>
@@ -248,7 +370,7 @@ function connectMachinesWs() {
           if (!row?.printer_id) continue;
           machineStateByPrinter.set(String(row.printer_id), row);
         }
-        renderOngoingJobs(latestRows);
+        renderDevices(latestRows);
       }
     } catch (_) {
       // ignore malformed frames
@@ -260,3 +382,4 @@ function connectMachinesWs() {
 
 connectDevicesWs();
 connectMachinesWs();
+syncShowAllButton();

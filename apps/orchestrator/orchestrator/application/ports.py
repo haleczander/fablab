@@ -44,3 +44,7 @@ class PrinterAdapterPort(Protocol):
 class PrinterAdapterResolverPort(Protocol):
     def get(self, adapter_name: str | None) -> PrinterAdapterPort | None: ...
 
+
+class ArpNeighborScannerPort(Protocol):
+    def scan(self, network: str, subnet_mask: str, timeout_s: float) -> dict[str, str]: ...
+

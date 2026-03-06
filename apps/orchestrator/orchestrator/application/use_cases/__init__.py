@@ -1,4 +1,5 @@
 from orchestrator.application.use_cases.create_printer_job import CreatePrinterJobUseCase
+from orchestrator.application.use_cases.discover_network_hosts import DiscoverNetworkHostsUseCase
 from orchestrator.application.use_cases.enqueue_start_print_command import EnqueueStartPrintCommandUseCase
 from orchestrator.application.use_cases.get_printer_machine_info import GetPrinterMachineInfoUseCase
 from orchestrator.application.use_cases.get_binding_by_printer_id import GetBindingByPrinterIdUseCase
@@ -20,6 +21,7 @@ from orchestrator.application.use_cases.upsert_printer_runtime import UpsertPrin
 
 __all__ = [
     "CreatePrinterJobUseCase",
+    "DiscoverNetworkHostsUseCase",
     "EnqueueStartPrintCommandUseCase",
     "GetPrinterMachineInfoUseCase",
     "GetBindingByPrinterIdUseCase",

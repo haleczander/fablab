@@ -28,6 +28,7 @@ from orchestrator.infrastructure.backend_gateway import BackendGateway
 from orchestrator.infrastructure.db import get_session
 from orchestrator.infrastructure.printer_adapter_registry import PrinterAdapterRegistry
 from orchestrator.infrastructure.prusalink_adapter import PrusaLinkAdapter
+from orchestrator.infrastructure.discovery_cache import list_snapshot_rows
 from orchestrator.infrastructure.repositories import (
     SqlModelDeviceRuntimeRepository,
     SqlModelPrinterBindingRepository,
@@ -95,7 +96,11 @@ def get_list_device_binding_rows_use_case(
     device_runtime_repo: SqlModelDeviceRuntimeRepository = Depends(get_device_runtime_repo),
     binding_repo: SqlModelPrinterBindingRepository = Depends(get_binding_repo),
 ) -> ListDeviceBindingRowsUseCase:
-    return ListDeviceBindingRowsUseCase(device_runtime_repo=device_runtime_repo, binding_repo=binding_repo)
+    return ListDeviceBindingRowsUseCase(
+        device_runtime_repo=device_runtime_repo,
+        binding_repo=binding_repo,
+        discovery_snapshot_provider=list_snapshot_rows,
+    )
 
 
 def get_list_bindings_use_case(

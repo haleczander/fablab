@@ -1,4 +1,5 @@
 from orchestrator.application.ports import DeviceRuntimeRepositoryPort, PrinterBindingRepositoryPort
+from orchestrator.domain.models import DeviceRuntime
 from orchestrator.domain.models import PrinterBinding
 from orchestrator.domain.services import OrchestratorDomainService
 
@@ -21,6 +22,7 @@ class UpsertBindingUseCase:
         printer_mac: str | None = None,
         printer_serial: str | None = None,
         printer_model: str | None = None,
+        adapter_name: str | None = None,
     ) -> PrinterBinding:
         if not printer_ip and not printer_mac and not printer_serial:
             raise ValueError("printer_ip ou printer_mac ou printer_serial est requis")
@@ -37,7 +39,7 @@ class UpsertBindingUseCase:
             device = self.device_runtime_repo.get_by_mac(printer_mac)
         if not device and printer_ip:
             device = self.device_runtime_repo.get_by_ip(printer_ip)
-        detected_adapter = device.detected_adapter if device else None
+        detected_adapter = adapter_name or (device.detected_adapter if device else None)
         detected_model = device.detected_model if device else None
         detected_serial = device.device_serial if device else None
         effective_serial = printer_serial or detected_serial
@@ -127,7 +129,14 @@ class UpsertBindingUseCase:
         if not device and device_ip:
             device = self.device_runtime_repo.get_by_ip(device_ip)
         if not device:
-            return
+            if not device_ip:
+                return
+            device = DeviceRuntime(
+                device_ip=device_ip,
+                device_mac=device_mac,
+                device_serial=device_serial,
+                probe_reachable=True,
+            )
         device.is_bound = True
         device.bound_printer_id = printer_id
         self.device_runtime_repo.save(device)

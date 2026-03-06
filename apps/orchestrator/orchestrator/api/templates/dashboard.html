@@ -18,7 +18,21 @@
     </section>
 
     <section class="card">
-      <h3>Devices disponibles (non bindes)</h3>
+      <div class="section-head">
+        <h3>Devices disponibles (non bindes)</h3>
+        <div class="section-actions">
+          <button id="showAllBtn" class="btn-secondary" onclick="toggleShowAllAvailable()">Tout voir</button>
+          <button id="scanBtn" class="icon-btn" onclick="refreshNetworkDiscovery()" aria-label="Refresh reseau" title="Refresh reseau">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="scanProgress" class="scan-progress hidden" aria-hidden="true">
+        <div id="scanProgressBar" class="scan-progress-bar"></div>
+      </div>
+      <p id="scanMsg" class="muted scan-msg"></p>
       <p id="availMsg" class="muted"></p>
       <div class="table-wrap">
         <table id="availableTable">

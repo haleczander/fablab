@@ -1,6 +1,7 @@
 import asyncio
 import ipaddress
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -11,9 +12,11 @@ from orchestrator.api.events import broadcast_machines
 from orchestrator.application.app_services import FleetViewService
 from orchestrator.domain.mac import normalize_mac
 from orchestrator.domain.models import DeviceRuntime, PrinterBinding
+from orchestrator.infrastructure.adapters import probe_device
+from orchestrator.infrastructure.discovery_cache import build_rows_from_discovery, list_snapshot_rows, replace_snapshot
 from orchestrator.infrastructure.db import engine
-from orchestrator.infrastructure.discovery import scan_cidr
 from orchestrator.infrastructure.live_machine_state import upsert_machine_state
+from orchestrator.infrastructure.scapy_arp_scanner import ScapyArpNeighborScanner
 from orchestrator.infrastructure.repositories import (
     SqlModelDeviceRuntimeRepository,
     SqlModelPrinterBindingRepository,
@@ -48,32 +51,6 @@ def _read_arp_table() -> dict[str, str]:
         if mac:
             table[ip] = mac
     return table
-
-
-def _scan_arp_with_scapy(cidrs: list[str], timeout_s: float) -> dict[str, str]:
-    try:
-        from scapy.all import ARP, Ether, srp  # type: ignore
-    except Exception:
-        return {}
-
-    table: dict[str, str] = {}
-    for cidr in cidrs:
-        try:
-            packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=cidr)
-            answered, _ = srp(packet, timeout=max(0.3, min(timeout_s, 2.5)), verbose=False)
-        except Exception:
-            continue
-        for _, response in answered:
-            ip = getattr(response, "psrc", None)
-            mac = normalize_mac(getattr(response, "hwsrc", None))
-            if ip and mac:
-                table[str(ip)] = mac
-    return table
-
-
-def _ip_in_any_cidr(ip: str, cidrs: list[str]) -> bool:
-    addr = ipaddress.ip_address(ip)
-    return any(addr in ipaddress.ip_network(cidr, strict=False) for cidr in cidrs)
 
 
 def _http_json(ip: str, path: str, timeout_s: float) -> tuple[int, dict | None]:
@@ -133,7 +110,36 @@ def _map_prusalink_state(raw_state: str) -> str:
 def _refresh_bound_printers(session: Session, timeout_s: float, now: datetime) -> int:
     updated = 0
     bindings = list(session.exec(select(PrinterBinding)).all())
+    snapshot = list_snapshot_rows()
+
+    by_mac: dict[str, dict[str, str | bool | int | float | None]] = {}
+    by_serial: dict[str, dict[str, str | bool | int | float | None]] = {}
+    for row in snapshot:
+        mac = str(row.get("device_mac") or "").strip()
+        serial = str(row.get("device_serial") or "").strip()
+        if mac:
+            by_mac[mac] = row
+        if serial:
+            by_serial[serial] = row
+
     for binding in bindings:
+        if (binding.adapter_name or "").lower() != "prusalink" or not binding.printer_ip:
+            observed = None
+            if binding.printer_serial:
+                observed = by_serial.get(binding.printer_serial)
+            if not observed and binding.printer_mac:
+                observed = by_mac.get(binding.printer_mac)
+            if observed:
+                if not binding.printer_ip and observed.get("device_ip"):
+                    binding.printer_ip = str(observed.get("device_ip"))
+                if not binding.adapter_name and observed.get("detected_adapter"):
+                    binding.adapter_name = str(observed.get("detected_adapter"))
+                if not binding.printer_serial and observed.get("device_serial"):
+                    binding.printer_serial = str(observed.get("device_serial"))
+                if not binding.printer_model and observed.get("detected_model"):
+                    binding.printer_model = str(observed.get("detected_model"))
+                session.add(binding)
+
         if (binding.adapter_name or "").lower() != "prusalink":
             continue
         if not binding.printer_ip:
@@ -196,28 +202,37 @@ def _refresh_bound_printers(session: Session, timeout_s: float, now: datetime) -
     return updated
 
 
-def run_discovery_once(cidrs: list[str], timeout_s: float, max_hosts: int) -> int:
-    discovered: dict[str, tuple[str | None, str | None, str | None, bool]] = {}
-    for cidr in cidrs:
-        for ip, probe in scan_cidr(cidr, timeout_s=timeout_s, max_hosts=max_hosts):
-            discovered[ip] = (probe.adapter_name, probe.model_hint, probe.serial_hint, True)
-
-    arp = _scan_arp_with_scapy(cidrs=cidrs, timeout_s=timeout_s)
-    arp.update(_read_arp_table())
-    for ip, mac in arp.items():
-        if not mac:
-            continue
-        if not _ip_in_any_cidr(ip, cidrs):
-            continue
-        if ip not in discovered:
-            discovered[ip] = ("arp-neighbor", None, None, True)
-
+def persist_discovery(
+    discovered: dict[str, tuple[str | None, str | None, str | None, bool]],
+    arp: dict[str, str],
+    timeout_s: float,
+    refresh_bound: bool = False,
+) -> int:
     now = datetime.now(timezone.utc)
     updated = 0
 
     with Session(engine) as session:
-        for ip, (adapter_name, model_hint, serial_hint, reachable) in discovered.items():
+        for ip, host in discovered.items():
+            adapter_name, model_hint, serial_hint, reachable = host
             mac = arp.get(ip)
+
+            ignored_by_mac = None
+            if mac:
+                ignored_by_mac = session.exec(
+                    select(DeviceRuntime).where(DeviceRuntime.device_mac == mac, DeviceRuntime.is_ignored == True)  # noqa: E712
+                ).first()
+
+            binding = None
+            if serial_hint:
+                binding = session.exec(select(PrinterBinding).where(PrinterBinding.printer_serial == serial_hint)).first()
+            if not binding and mac:
+                binding = session.exec(select(PrinterBinding).where(PrinterBinding.printer_mac == mac)).first()
+            if not binding:
+                binding = session.exec(select(PrinterBinding).where(PrinterBinding.printer_ip == ip)).first()
+
+            # Persist discovery only for bound machines or MACs explicitly flagged as non-machine.
+            if not binding and ignored_by_mac is None:
+                continue
 
             device = None
             if serial_hint:
@@ -226,6 +241,8 @@ def run_discovery_once(cidrs: list[str], timeout_s: float, max_hosts: int) -> in
                 device = session.exec(select(DeviceRuntime).where(DeviceRuntime.device_mac == mac)).first()
             if not device:
                 device = session.exec(select(DeviceRuntime).where(DeviceRuntime.device_ip == ip)).first()
+            if not device and ignored_by_mac is not None:
+                device = ignored_by_mac
             if not device:
                 device = DeviceRuntime(device_ip=ip)
 
@@ -248,16 +265,9 @@ def run_discovery_once(cidrs: list[str], timeout_s: float, max_hosts: int) -> in
                         if maybe_model:
                             device.detected_model = maybe_model
 
-                status_code, status_payload = _http_json(ip, "/api/v1/status", timeout_s)
-                if status_code == 200 and isinstance(status_payload, dict):
-                    pass
-
-            binding = None
             effective_serial = device.device_serial or serial_hint
-            if effective_serial:
+            if not binding and effective_serial:
                 binding = session.exec(select(PrinterBinding).where(PrinterBinding.printer_serial == effective_serial)).first()
-            if not binding and mac:
-                binding = session.exec(select(PrinterBinding).where(PrinterBinding.printer_mac == mac)).first()
             if binding:
                 # Keep printer routing usable when DHCP changes IP.
                 binding.printer_ip = ip
@@ -265,16 +275,65 @@ def run_discovery_once(cidrs: list[str], timeout_s: float, max_hosts: int) -> in
                     binding.printer_serial = effective_serial
                 device.is_bound = True
                 device.bound_printer_id = binding.printer_id
+            else:
+                device.is_bound = False
+                device.bound_printer_id = None
 
             session.add(device)
             if binding:
                 session.add(binding)
             updated += 1
 
-        updated += _refresh_bound_printers(session, timeout_s, now)
+        if refresh_bound:
+            updated += _refresh_bound_printers(session, timeout_s, now)
 
         session.commit()
 
+    return updated
+
+
+def run_discovery_once(
+    cidrs: list[str],
+    timeout_s: float,
+    max_hosts: int,
+    refresh_bound: bool = False,
+) -> int:
+    arp: dict[str, str] = {}
+    scanner = ScapyArpNeighborScanner()
+    for cidr in cidrs:
+        network = ipaddress.ip_network(cidr, strict=False)
+        arp.update(scanner.scan(network=str(network.network_address), subnet_mask=str(network.netmask), timeout_s=timeout_s))
+    arp.update(_read_arp_table())
+
+    candidate_ips: list[str] = []
+    for ip in sorted(arp.keys()):
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        if any(addr in ipaddress.ip_network(cidr, strict=False) for cidr in cidrs):
+            candidate_ips.append(ip)
+    if max_hosts > 0:
+        candidate_ips = candidate_ips[:max_hosts]
+
+    discovered: dict[str, tuple[str | None, str | None, str | None, bool]] = {}
+    with ThreadPoolExecutor(max_workers=min(24, len(candidate_ips) or 1)) as pool:
+        futures = {pool.submit(probe_device, ip, timeout_s): ip for ip in candidate_ips}
+        for future in as_completed(futures):
+            ip = futures[future]
+            try:
+                probe = future.result()
+            except Exception:
+                probe = None
+            if probe and probe.reachable:
+                discovered[ip] = (probe.adapter_name, probe.model_hint, probe.serial_hint, True)
+            else:
+                discovered[ip] = ("arp-neighbor", None, None, True)
+
+    replace_snapshot(build_rows_from_discovery(discovered=discovered, arp=arp))
+    updated = len(discovered)
+    if refresh_bound:
+        updated += refresh_bound_printers_once(timeout_s)
     return updated
 
 
@@ -307,6 +366,7 @@ async def discovery_loop(
                 cidrs=cidrs,
                 timeout_s=timeout_s,
                 max_hosts=max_hosts,
+                refresh_bound=False,
             )
             if updated > 0:
                 with Session(engine) as session:

@@ -9,10 +9,11 @@ services:
     environment:
       PRINTER_NAME: "PRN-01"
       PRINTER_MODEL: "MK4"
-      PRINTER_SERIAL: "SIM-PRN01-SN"
-    mac_address: "02:42:ac:19:00:11"
+      PRINTER_SERIAL: "SIM-01"
     networks:
-      - imp3d_net
+      imp3d_net:
+        ipv4_address: "172.21.10.11"
+        mac_address: "02:42:ac:15:0a:01"
     restart: unless-stopped
 
   printer-prn02:
@@ -23,10 +24,11 @@ services:
     environment:
       PRINTER_NAME: "PRN-02"
       PRINTER_MODEL: "MK4S"
-      PRINTER_SERIAL: "SIM-PRN02-SN"
-    mac_address: "02:42:ac:19:00:12"
+      PRINTER_SERIAL: "SIM-02"
     networks:
-      - imp3d_net
+      imp3d_net:
+        ipv4_address: "172.21.10.12"
+        mac_address: "02:42:ac:15:0a:02"
     restart: unless-stopped
 
   printer-prn03:
@@ -37,10 +39,41 @@ services:
     environment:
       PRINTER_NAME: "PRN-03"
       PRINTER_MODEL: "MINI+"
-      PRINTER_SERIAL: "SIM-PRN03-SN"
-    mac_address: "02:42:ac:19:00:13"
+      PRINTER_SERIAL: "SIM-03"
     networks:
-      - imp3d_net
+      imp3d_net:
+        ipv4_address: "172.21.10.13"
+        mac_address: "02:42:ac:15:0a:03"
+    restart: unless-stopped
+
+  printer-prn04:
+    build:
+      context: mock/printer-sim
+      dockerfile: Dockerfile
+    container_name: sim-printer-prn04
+    environment:
+      PRINTER_NAME: "PRN-04"
+      PRINTER_MODEL: "MK3S"
+      PRINTER_SERIAL: "SIM-04"
+    networks:
+      imp3d_net:
+        ipv4_address: "172.21.10.14"
+        mac_address: "02:42:ac:15:0a:04"
+    restart: unless-stopped
+
+  printer-prn05:
+    build:
+      context: mock/printer-sim
+      dockerfile: Dockerfile
+    container_name: sim-printer-prn05
+    environment:
+      PRINTER_NAME: "PRN-05"
+      PRINTER_MODEL: "MK3S"
+      PRINTER_SERIAL: "SIM-05"
+    networks:
+      imp3d_net:
+        ipv4_address: "172.21.10.15"
+        mac_address: "02:42:ac:15:0a:05"
     restart: unless-stopped
 
 networks:

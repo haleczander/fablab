@@ -25,6 +25,7 @@ services:
     environment:
       APP_MODULE: main:app
       APP_PORT: 8001
+      ORCH_DISCOVERY_CIDRS: 172.21.10.0/24
     expose:
       - "8001"
     volumes:
@@ -45,3 +46,6 @@ networks:
     name: fablab_imp3d_net
     driver: bridge
     internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
