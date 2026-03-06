@@ -30,6 +30,7 @@ services:
     depends_on:
       - backend
     environment:
+      NUXT_BACKEND_INTERNAL_BASE: http://backend:8000
       NUXT_PUBLIC_BACKEND_BASE: ${BACKEND_PUBLIC_URL:-http://localhost:8000}
     ports:
       - "${BACKOFFICE_PORT:-8080}:3000"
@@ -45,6 +46,7 @@ services:
     depends_on:
       - backend
     environment:
+      NUXT_BACKEND_INTERNAL_BASE: http://backend:8000
       NUXT_PUBLIC_BACKEND_BASE: ${BACKEND_PUBLIC_URL:-http://localhost:8000}
     ports:
       - "${FRONTOFFICE_PORT:-8081}:3000"

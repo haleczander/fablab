@@ -6,8 +6,8 @@ from sqlmodel import Session
 
 from backend.api.routes.backend import router as backend_router
 from backend.application.use_cases import RetryQueuedJobsUseCase
-from backend.infrastructure.db import init_db
 from backend.infrastructure.db import engine
+from backend.infrastructure.migrations import run_db_migrations
 from backend.infrastructure.orchestrator_gateway import OrchestratorGateway
 from backend.infrastructure.orchestrator_ws import consume_machine_feed
 from backend.infrastructure.repositories import SqlModelJobRepository
@@ -40,7 +40,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup() -> None:
     global _ws_stop_event, _ws_task, _queue_retry_stop_event, _queue_retry_task
-    init_db()
+    run_db_migrations()
     with Session(engine) as session:
         RetryQueuedJobsUseCase(
             job_repo=SqlModelJobRepository(session),

@@ -22,7 +22,11 @@ Backend API (`apps/backend/main.py`):
 - `GET /jobs`
 - `POST /jobs`
 - `POST /jobs/{job_id}/progress`
-- `GET /ws/printers` (WebSocket)
+- `GET /cms/frontoffice`
+- `PUT /cms/frontoffice/draft`
+- `POST /cms/frontoffice/publish`
+- `GET /cms/frontoffice/published`
+- `GET /ws/machines` (WebSocket)
 
 ## Stack front (debutant)
 - `Nuxt 3` choisi pour les 2 fronts (base Vue, prise en main simple).
@@ -69,6 +73,7 @@ Orchestrateur edge (proxy TLS + orchestrateur):
 docker compose --env-file .env.orchestrateur -f compose.orchestrateur.yml up -d --build
 ```
 Dashboard orchestrateur via proxy: `https://localhost:8443/dashboard`
+Si `deploy/certs/fullchain.pem` et `deploy/certs/privkey.pem` sont absents, le reverse proxy genere un certificat auto-signe au demarrage.
 
 Backend API + backoffice + frontoffice:
 ```bash
@@ -79,10 +84,14 @@ Cette stack lance:
 - backend API: `http://localhost:8000` (ou `BACKEND_PORT`)
 - backoffice Nuxt: `http://localhost:8080` (ou `BACKOFFICE_PORT`)
 - frontoffice Nuxt: `http://localhost:8081` (ou `FRONTOFFICE_PORT`)
+- en Docker, Nuxt utilise `http://backend:8000` en interne pour le SSR et `BACKEND_PUBLIC_URL` pour le navigateur
 
 ## Notes frontoffice
-- Le frontoffice utilise surtout le flux `ws://<backend>/ws/printers` pour l'etat des machines.
-- Fallback en polling `GET /printers` si le WebSocket n'est pas disponible.
+- Le frontoffice charge le snapshot publie via `GET /cms/frontoffice/published`.
+- Le bloc `machines_feed` ouvre ensuite `ws://<backend>/ws/machines` pour l'etat des machines.
+
+## Notes backend
+- Le backend applique ses migrations au demarrage via la table `schema_migrations`.
 
 Simulation imprimantes 3D (compose separe):
 ```bash

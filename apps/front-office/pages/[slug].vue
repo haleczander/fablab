@@ -2,13 +2,12 @@
   <main class="fo-wrap">
     <FrontHeader :sections="navSections" />
 
-    <section class="fo-hero">
-      <h1>FabLab JUNIA ISEN</h1>
+    <section v-if="section" class="fo-hero compact">
+      <h1>{{ section.title }}</h1>
     </section>
 
     <PublishedSection
-      v-for="section in homeSections"
-      :key="section.id"
+      v-if="section"
       :section="section"
       :sections="allSections"
     />
@@ -61,11 +60,16 @@ type CmsPublishedSite = {
   published_at: string | null
 }
 
+const route = useRoute()
 const config = useRuntimeConfig()
 const backendBase = (process.server ? config.backendInternalBase : config.public.backendBase) as string
 const { data } = await useFetch<CmsPublishedSite>(`${backendBase}/cms/frontoffice/published`)
 
 const allSections = computed(() => data.value?.published.sections ?? [])
-const navSections = computed(() => allSections.value.filter((section) => section.show_in_nav))
-const homeSections = computed(() => allSections.value.filter((section) => section.show_in_home))
+const navSections = computed(() => allSections.value.filter((item) => item.show_in_nav))
+const section = computed(() => allSections.value.find((item) => item.slug === route.params.slug))
+
+if (!section.value) {
+  throw createError({ statusCode: 404, statusMessage: "Section introuvable" })
+}
 </script>
