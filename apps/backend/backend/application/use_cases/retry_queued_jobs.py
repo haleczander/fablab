@@ -1,4 +1,5 @@
 import json
+from urllib.parse import urlparse
 
 from backend.application.exceptions import DispatchTargetNotFoundError, DispatchTemporaryError
 from backend.application.ports import JobRepositoryPort, OrchestratorGatewayPort
@@ -20,12 +21,15 @@ class RetryQueuedJobsUseCase:
     def execute(self) -> list[BackendJob]:
         updated: list[BackendJob] = []
         for job in self.job_repo.list_queued_jobs():
-            est_duration_s = _extract_est_duration_seconds(job.parameters_json)
+            parameters = _parse_parameters(job.parameters_json)
+            est_duration_s = _extract_est_duration_seconds(parameters)
+            printer_file_path = _extract_printer_file_path(parameters, job.gcode_url)
             try:
                 self.orchestrator_gateway.enqueue_start_print(
                     printer_id=job.printer_id,
                     job_id=job.job_id,
                     est_duration_s=est_duration_s,
+                    printer_file_path=printer_file_path,
                 )
                 self.domain_service.claim_next_job(job)
                 job.message = "DISPATCHED_TO_ORCHESTRATOR"
@@ -37,11 +41,14 @@ class RetryQueuedJobsUseCase:
         return updated
 
 
-def _extract_est_duration_seconds(parameters_json: str) -> int:
+def _parse_parameters(parameters_json: str) -> dict[str, object]:
     try:
-        parameters = json.loads(parameters_json) if parameters_json else {}
+        return json.loads(parameters_json) if parameters_json else {}
     except json.JSONDecodeError:
-        parameters = {}
+        return {}
+
+
+def _extract_est_duration_seconds(parameters: dict[str, object]) -> int:
     for key in ("est_duration_s", "duration_s", "print_duration_s"):
         raw = parameters.get(key)
         if raw is None:
@@ -52,4 +59,23 @@ def _extract_est_duration_seconds(parameters_json: str) -> int:
             continue
         return max(30, min(86400, value))
     return 900
+
+
+def _extract_printer_file_path(parameters: dict[str, object], gcode_url: str) -> str | None:
+    for key in ("printer_file_path", "printerFilePath"):
+        raw = parameters.get(key)
+        if isinstance(raw, str):
+            value = raw.strip()
+            if value:
+                return value
+    value = gcode_url.strip()
+    if value.startswith("/"):
+        return value
+    parsed = urlparse(value)
+    path = (parsed.path or "").strip()
+    if path and "/" in path:
+        filename = path.rsplit("/", 1)[-1].strip()
+        if filename:
+            return f"/local/{filename}"
+    return None
 

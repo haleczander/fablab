@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
@@ -11,6 +10,8 @@ from orchestrator.api.dependencies import (
     get_machine_states_payload_use_case,
 )
 from orchestrator.api.events import (
+    ws_device_clients,
+    ws_device_lock,
     ws_events_clients,
     ws_events_lock,
     ws_machine_clients,
@@ -83,11 +84,17 @@ async def ws_devices(
     list_device_binding_rows_use_case: ListDeviceBindingRowsUseCase = Depends(get_list_device_binding_rows_use_case),
 ) -> None:
     await websocket.accept()
+    with ws_device_lock:
+        ws_device_clients.add(websocket)
     try:
+        rows = list_device_binding_rows_use_case.execute()
+        await websocket.send_text(json.dumps({"event": "devices_snapshot", "payload": rows}))
         while True:
-            rows = list_device_binding_rows_use_case.execute()
-            await websocket.send_text(json.dumps({"event": "devices_snapshot", "payload": rows}))
-            await asyncio.sleep(3)
+            if await websocket.receive_text() == "ping":
+                await websocket.send_text(json.dumps({"event": "pong", "payload": None}))
     except WebSocketDisconnect:
         pass
+    finally:
+        with ws_device_lock:
+            ws_device_clients.discard(websocket)
 

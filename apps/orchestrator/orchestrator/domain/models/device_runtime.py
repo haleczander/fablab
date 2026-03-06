@@ -12,6 +12,7 @@ class DeviceRuntime(SQLModel, table=True):
     device_mac: Optional[str] = Field(default=None, index=True, unique=True)
     device_serial: Optional[str] = Field(default=None, index=True, unique=True)
     is_bound: bool = Field(default=False)
+    is_ignored: bool = Field(default=False, index=True)
     bound_printer_id: Optional[str] = Field(default=None, index=True)
     detected_model: Optional[str] = None
     detected_adapter: Optional[str] = None

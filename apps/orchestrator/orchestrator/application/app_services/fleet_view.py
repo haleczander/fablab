@@ -3,6 +3,7 @@ from orchestrator.application.ports import (
     PrinterBindingRepositoryPort,
     PrinterRuntimeRepositoryPort,
 )
+from orchestrator.infrastructure.live_machine_state import get_machine_state
 
 
 class FleetViewService:
@@ -21,7 +22,6 @@ class FleetViewService:
     def list_fleet(self) -> list[dict[str, str | None]]:
         rows: list[dict[str, str | None]] = []
         for binding in self.binding_repo.list_all():
-            runtime = self.printer_runtime_repo.get_by_printer_id(binding.printer_id)
             device = None
             if binding.printer_mac:
                 device = self.device_runtime_repo.get_by_mac(binding.printer_mac)
@@ -29,11 +29,7 @@ class FleetViewService:
                 device = self.device_runtime_repo.get_by_serial(binding.printer_serial)
             if not device and binding.printer_ip:
                 device = self.device_runtime_repo.get_by_ip(binding.printer_ip)
-            heartbeat = None
-            if runtime and runtime.last_heartbeat_at:
-                heartbeat = runtime.last_heartbeat_at.isoformat()
-            elif device and device.last_heartbeat_at:
-                heartbeat = device.last_heartbeat_at.isoformat()
+            live = get_machine_state(binding.printer_id)
 
             rows.append(
                 {
@@ -43,8 +39,12 @@ class FleetViewService:
                     "printer_serial": binding.printer_serial,
                     "printer_model": binding.printer_model,
                     "adapter_name": binding.adapter_name or (device.detected_adapter if device else None),
-                    "status": runtime.status if runtime else (device.status if device else None),
-                    "last_heartbeat_at": heartbeat,
+                    "status": str(live.get("status")) if live and live.get("status") is not None else None,
+                    "current_job_id": str(live.get("current_job_id")) if live and live.get("current_job_id") is not None else None,
+                    "progress_pct": str(live.get("progress_pct")) if live and live.get("progress_pct") is not None else None,
+                    "nozzle_temp_c": str(live.get("nozzle_temp_c")) if live and live.get("nozzle_temp_c") is not None else None,
+                    "bed_temp_c": str(live.get("bed_temp_c")) if live and live.get("bed_temp_c") is not None else None,
+                    "last_heartbeat_at": str(live.get("last_heartbeat_at")) if live and live.get("last_heartbeat_at") is not None else None,
                 }
             )
         rows.sort(key=lambda r: r["printer_id"] or "")
@@ -102,6 +102,10 @@ class FleetViewService:
                     "last_heartbeat_at": row.get("last_heartbeat_at"),
                     "machine_id": row.get("printer_id"),
                     "status": row.get("status"),
+                    "current_job_id": row.get("current_job_id"),
+                    "progress_pct": row.get("progress_pct"),
+                    "nozzle_temp_c": row.get("nozzle_temp_c"),
+                    "bed_temp_c": row.get("bed_temp_c"),
                     "model": row.get("printer_model"),
                 }
             )

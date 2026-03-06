@@ -22,7 +22,7 @@ class IngestDeviceStateUseCase:
         self.upsert_printer_runtime = upsert_printer_runtime
         self.domain_service = domain_service or OrchestratorDomainService()
 
-    def execute(self, source_ip: str, data: DeviceIngestInput) -> tuple[DeviceRuntime, PrinterRuntime | None]:
+    def execute(self, source_ip: str, data: DeviceIngestInput) -> tuple[DeviceRuntime, PrinterRuntime | None, bool]:
         source_mac = normalize_mac(data.mac_address)
         source_serial = data.serial_number.strip() if data.serial_number else None
 
@@ -31,6 +31,7 @@ class IngestDeviceStateUseCase:
             device = self.device_runtime_repo.get_by_mac(source_mac) if source_mac else None
         if not device:
             device = self.device_runtime_repo.get_by_ip(source_ip)
+        is_new_device = device is None
         if not device:
             device = self.domain_service.new_device_runtime(source_ip, source_mac, source_serial)
         elif source_mac and not device.device_mac:
@@ -50,7 +51,7 @@ class IngestDeviceStateUseCase:
         saved_device = self.device_runtime_repo.save(device)
 
         if not binding:
-            return saved_device, None
+            return saved_device, None, is_new_device
 
         printer_state = PrinterStateInput(
             status=saved_device.status,
@@ -66,5 +67,5 @@ class IngestDeviceStateUseCase:
             source_printer_mac=source_mac,
             source_printer_serial=source_serial,
         )
-        return saved_device, runtime
+        return saved_device, runtime, is_new_device
 

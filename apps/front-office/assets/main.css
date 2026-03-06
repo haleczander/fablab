@@ -125,3 +125,19 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 640px) {
+  .wrap {
+    width: min(1120px, calc(100vw - 1.2rem));
+    margin: 1rem auto 1.4rem;
+  }
+
+  .hero,
+  .card {
+    padding: 0.85rem;
+  }
+
+  .stats {
+    line-height: 1.35;
+  }
+}

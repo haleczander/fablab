@@ -10,11 +10,9 @@ from orchestrator.application.use_cases.list_bindings import ListBindingsUseCase
 from orchestrator.application.use_cases.list_device_runtimes import ListDeviceRuntimesUseCase
 from orchestrator.application.use_cases.list_device_binding_rows import ListDeviceBindingRowsUseCase
 from orchestrator.application.use_cases.list_fleet import ListFleetUseCase
-from orchestrator.application.use_cases.list_printer_runtimes import ListPrinterRuntimesUseCase
 from orchestrator.application.use_cases.list_unbound_ips import ListUnboundIpsUseCase
 from orchestrator.application.use_cases.list_unmatched_contract_devices import ListUnmatchedContractDevicesUseCase
 from orchestrator.application.use_cases.machine_states_payload import MachineStatesPayloadUseCase
-from orchestrator.application.use_cases.mark_job_sent import MarkJobSentUseCase
 from orchestrator.application.use_cases.pop_next_command import PopNextCommandUseCase
 from orchestrator.application.use_cases.sync_printer_state import SyncPrinterStateUseCase
 from orchestrator.application.use_cases.upsert_binding import UpsertBindingUseCase
@@ -33,11 +31,9 @@ __all__ = [
     "ListDeviceRuntimesUseCase",
     "ListDeviceBindingRowsUseCase",
     "ListFleetUseCase",
-    "ListPrinterRuntimesUseCase",
     "ListUnboundIpsUseCase",
     "ListUnmatchedContractDevicesUseCase",
     "MachineStatesPayloadUseCase",
-    "MarkJobSentUseCase",
     "PopNextCommandUseCase",
     "SyncPrinterStateUseCase",
     "UpsertBindingUseCase",

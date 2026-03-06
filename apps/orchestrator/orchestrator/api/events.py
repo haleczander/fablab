@@ -7,6 +7,8 @@ ws_events_clients: set[WebSocket] = set()
 ws_events_lock = Lock()
 ws_machine_clients: set[WebSocket] = set()
 ws_machine_lock = Lock()
+ws_device_clients: set[WebSocket] = set()
+ws_device_lock = Lock()
 
 
 async def broadcast_events(event: str, payload: dict | list | None = None) -> None:
@@ -43,4 +45,22 @@ async def broadcast_machines(event: str, payload: list[dict[str, str | None]]) -
         with ws_machine_lock:
             for client in dead:
                 ws_machine_clients.discard(client)
+
+
+async def broadcast_devices(event: str, payload: list[dict[str, str | bool | int | None]]) -> None:
+    message = json.dumps({"event": event, "payload": payload})
+    with ws_device_lock:
+        clients = list(ws_device_clients)
+
+    dead: list[WebSocket] = []
+    for client in clients:
+        try:
+            await client.send_text(message)
+        except Exception:
+            dead.append(client)
+
+    if dead:
+        with ws_device_lock:
+            for client in dead:
+                ws_device_clients.discard(client)
 

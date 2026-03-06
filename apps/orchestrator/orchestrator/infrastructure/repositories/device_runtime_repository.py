@@ -10,6 +10,9 @@ class SqlModelDeviceRuntimeRepository:
     def list_all(self) -> list[DeviceRuntime]:
         return list(self.session.exec(select(DeviceRuntime)).all())
 
+    def get_by_id(self, device_id: int) -> DeviceRuntime | None:
+        return self.session.exec(select(DeviceRuntime).where(DeviceRuntime.id == device_id)).first()
+
     def get_by_ip(self, device_ip: str) -> DeviceRuntime | None:
         return self.session.exec(select(DeviceRuntime).where(DeviceRuntime.device_ip == device_ip)).first()
 

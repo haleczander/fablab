@@ -10,7 +10,6 @@ from orchestrator.api.dependencies import (
     get_list_unmatched_contract_devices_use_case,
     get_list_unbound_ips_use_case,
     get_machine_states_payload_use_case,
-    get_mark_job_sent_use_case,
     get_printer_machine_info_use_case,
     get_sync_printer_state_use_case,
 )
@@ -24,7 +23,6 @@ from orchestrator.application.use_cases import (
     ListUnmatchedContractDevicesUseCase,
     ListUnboundIpsUseCase,
     MachineStatesPayloadUseCase,
-    MarkJobSentUseCase,
     SyncPrinterStateUseCase,
 )
 from orchestrator.domain.models import PrinterRuntime
@@ -40,7 +38,6 @@ async def command_start_print(
     binding_by_printer_use_case: GetBindingByPrinterIdUseCase = Depends(get_binding_by_printer_id_use_case),
     enqueue_start_command_use_case: EnqueueStartPrintCommandUseCase = Depends(get_enqueue_start_command_use_case),
     create_printer_job_use_case: CreatePrinterJobUseCase = Depends(get_create_printer_job_use_case),
-    mark_job_sent_use_case: MarkJobSentUseCase = Depends(get_mark_job_sent_use_case),
     list_fleet_use_case: ListFleetUseCase = Depends(get_list_fleet_use_case),
     list_unbound_ips_use_case: ListUnboundIpsUseCase = Depends(get_list_unbound_ips_use_case),
     list_unmatched_contract_devices_use_case: ListUnmatchedContractDevicesUseCase = Depends(
@@ -56,10 +53,9 @@ async def command_start_print(
     command = {"type": "START_PRINT", "job_id": job_id, "est_duration_s": payload.est_duration_s}
     queued = 0
     if (binding.adapter_name or "").lower() == "prusalink":
-        if not payload.printer_file_path:
-            raise HTTPException(status_code=422, detail="printer_file_path requis pour adapter prusalink")
+        printer_file_path = payload.printer_file_path or f"/local/{job_id}.gcode"
         try:
-            remote = create_printer_job_use_case.execute(printer_id=printer_id, printer_file_path=payload.printer_file_path)
+            remote = create_printer_job_use_case.execute(printer_id=printer_id, printer_file_path=printer_file_path)
         except (LookupError, ValueError) as err:
             raise HTTPException(status_code=400, detail=str(err)) from err
         except RuntimeError as err:
@@ -70,11 +66,8 @@ async def command_start_print(
     else:
         queued = enqueue_start_command_use_case.execute(printer_id, command)
 
-    runtime = mark_job_sent_use_case.execute(printer_id=printer_id, job_id=job_id)
-
     out: dict[str, str | int] = {"printer_id": printer_id, "queued": queued, **command}
     await broadcast_events("command_queued", out)
-    await broadcast_events("runtime_updated", runtime.model_dump(mode="json"))
     await broadcast_events(
         "fleet_updated",
         {

@@ -109,13 +109,6 @@ class OrchestratorDomainService:
             row.last_printer_serial = source_serial
         return row
 
-    def mark_job_sent(self, row: PrinterRuntime, job_id: str) -> PrinterRuntime:
-        row.status = "IN_USE"
-        row.current_job_id = job_id
-        row.progress_pct = 0.0
-        row.last_heartbeat_at = now_utc()
-        return row
-
     def to_backend_payload(self, row: PrinterRuntime) -> dict:
         return {
             "status": row.status,

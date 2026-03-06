@@ -4,164 +4,61 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Orchestrateur Dashboard</title>
-  <style>
-    body { font-family: Segoe UI, Tahoma, sans-serif; margin: 0; background: #eef5ff; }
-    main { max-width: 1180px; margin: 20px auto; padding: 0 12px; }
-    .card { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.08); margin-bottom: 12px; }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; }
-    input, button { padding: 8px; border-radius: 8px; }
-    button { border: 0; background: #0b7a75; color: #fff; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 14px; }
-    .muted { color: #6b7280; font-size: 12px; }
-  </style>
+  <link rel="stylesheet" href="/dashboard.css" />
 </head>
 <body>
   <main>
     <h1>Dashboard Orchestrateur</h1>
 
     <section class="card">
+      <h3>Jobs en cours</h3>
+      <p id="jobsMsg" class="muted"></p>
+      <div id="ongoingJobs" class="jobs-grid"></div>
+      <p class="muted">Vue 3D temps reel non disponible avec les APIs machine actuelles (etat/telemetrie uniquement).</p>
+    </section>
+
+    <section class="card">
       <h3>Devices disponibles (non bindes)</h3>
       <p id="availMsg" class="muted"></p>
-      <table id="availableTable">
-        <thead>
-          <tr>
-            <th>contrat supporte</th>
-            <th>ip</th>
-            <th>mac</th>
-            <th>serial</th>
-            <th>modele detecte</th>
-            <th>id metier</th>
-            <th>modele exact</th>
-            <th>action</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="table-wrap">
+        <table id="availableTable">
+          <thead>
+            <tr>
+              <th class="dot-col"></th>
+              <th>id metier</th>
+              <th>modele</th>
+              <th>contrat</th>
+              <th>reseau</th>
+              <th>action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
 
     <section class="card">
       <h3>Devices bindes</h3>
       <p id="boundMsg" class="muted"></p>
-      <table id="boundTable">
-        <thead>
-          <tr>
-            <th>contrat supporte</th>
-            <th>ip</th>
-            <th>mac</th>
-            <th>serial</th>
-            <th>modele detecte</th>
-            <th>id metier</th>
-            <th>modele exact</th>
-            <th>etat</th>
-            <th>heartbeat</th>
-            <th>action</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="table-wrap">
+        <table id="boundTable">
+          <thead>
+            <tr>
+              <th class="dot-col"></th>
+              <th>id metier</th>
+              <th>modele</th>
+              <th>contrat</th>
+              <th>reseau</th>
+              <th>action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
   </main>
 
-  <script>
-    async function api(path, opts = {}) {
-      const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
-      if (!r.ok) {
-        let t = "";
-        try { t = await r.text(); } catch (_) { t = r.statusText; }
-        throw new Error(t || r.statusText);
-      }
-      if (r.status === 204) return null;
-      return r.json();
-    }
-
-    function fmt(v) {
-      return (v === null || v === undefined || v === "") ? "-" : String(v);
-    }
-
-    function supportLabel(adapter) {
-      return String(adapter || "").toLowerCase() === "prusalink" ? "PrusaLink" : "X";
-    }
-
-    function esc(v) {
-      return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    async function saveBinding(mac, rowId, msgId) {
-      const pid = document.getElementById(`pid-${rowId}`).value.trim();
-      const model = document.getElementById(`model-${rowId}`).value.trim();
-      const msg = document.getElementById(msgId);
-      if (!pid) {
-        msg.textContent = "id metier requis";
-        return;
-      }
-      try {
-        await api("/printer-bindings", {
-          method: "POST",
-          body: JSON.stringify({ printer_id: pid, printer_mac: mac, printer_model: model || null }),
-        });
-        msg.textContent = "OK";
-      } catch (e) {
-        msg.textContent = e.message;
-      }
-    }
-
-    function renderDevices(rows) {
-      const available = (rows || []).filter((d) => !d.is_bound);
-      const bound = (rows || []).filter((d) => d.is_bound);
-
-      document.querySelector("#availableTable tbody").innerHTML = available.map((d, idx) => {
-        const rowId = `a-${idx}`;
-        const hasMac = Boolean(d.device_mac);
-        return `
-        <tr>
-          <td>${supportLabel(d.detected_adapter)}</td>
-          <td>${fmt(d.device_ip)}</td>
-          <td>${fmt(d.device_mac)}</td>
-          <td>${fmt(d.device_serial)}</td>
-          <td>${fmt(d.detected_model)}</td>
-          <td><input id="pid-${rowId}" placeholder="PRN-01" value="${esc(d.printer_id || "")}" /></td>
-          <td><input id="model-${rowId}" placeholder="MK4S" value="${esc(d.printer_model || d.detected_model || "")}" /></td>
-          <td><button ${hasMac ? "" : "disabled"} onclick="saveBinding('${esc(d.device_mac || "")}', '${rowId}', 'availMsg')">Binder</button></td>
-        </tr>`;
-      }).join("");
-
-      document.querySelector("#boundTable tbody").innerHTML = bound.map((d, idx) => {
-        const rowId = `b-${idx}`;
-        return `
-        <tr>
-          <td>${supportLabel(d.detected_adapter)}</td>
-          <td>${fmt(d.device_ip)}</td>
-          <td>${fmt(d.device_mac)}</td>
-          <td>${fmt(d.device_serial)}</td>
-          <td>${fmt(d.detected_model)}</td>
-          <td><input id="pid-${rowId}" value="${esc(d.printer_id || "")}" /></td>
-          <td><input id="model-${rowId}" value="${esc(d.printer_model || d.detected_model || "")}" /></td>
-          <td>${fmt(d.status)}</td>
-          <td>${fmt(d.last_heartbeat_at)}</td>
-          <td><button onclick="saveBinding('${esc(d.device_mac || "")}', '${rowId}', 'boundMsg')">Sauver</button></td>
-        </tr>`;
-      }).join("");
-    }
-
-    function connectDevicesWs() {
-      const proto = location.protocol === "https:" ? "wss" : "ws";
-      const ws = new WebSocket(`${proto}://${location.host}/ws/devices`);
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          if (message.event === "devices_snapshot" && Array.isArray(message.payload)) {
-            renderDevices(message.payload);
-          }
-        } catch (_) {
-          // ignore malformed frames
-        }
-      };
-      ws.onclose = () => setTimeout(connectDevicesWs, 1200);
-      ws.onerror = () => ws.close();
-    }
-
-    connectDevicesWs();
-  </script>
+  <script src="/dashboard.js" defer></script>
+  <datalist id="modelOptions"></datalist>
 </body>
 </html>

@@ -8,8 +8,17 @@ from config import ORCHESTRATOR_INTERNAL_URL
 
 
 class OrchestratorGateway:
-    def enqueue_start_print(self, printer_id: str, job_id: str, est_duration_s: int) -> None:
-        body = json.dumps({"job_id": job_id, "est_duration_s": est_duration_s}).encode("utf-8")
+    def enqueue_start_print(
+        self,
+        printer_id: str,
+        job_id: str,
+        est_duration_s: int,
+        printer_file_path: str | None = None,
+    ) -> None:
+        payload: dict[str, str | int] = {"job_id": job_id, "est_duration_s": est_duration_s}
+        if printer_file_path:
+            payload["printer_file_path"] = printer_file_path
+        body = json.dumps(payload).encode("utf-8")
         url = f"{ORCHESTRATOR_INTERNAL_URL.rstrip('/')}/printers/{printer_id}/commands/start"
         request = Request(
             url=url,

@@ -36,6 +36,7 @@ def _needs_device_schema_reset() -> bool:
             "device_mac",
             "device_serial",
             "is_bound",
+            "is_ignored",
             "bound_printer_id",
             "detected_model",
             "detected_adapter",

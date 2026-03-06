@@ -29,54 +29,58 @@
 
     <section class="card">
       <h2>Etat imprimantes (source orchestrateur)</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>machine_id</th>
-            <th>modele</th>
-            <th>status</th>
-            <th>heartbeat</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="machines.length === 0">
-            <td colspan="4" class="muted">Aucune imprimante</td>
-          </tr>
-          <tr v-for="p in machines" :key="p.machine_id">
-            <td>{{ fmt(p.machine_id) }}</td>
-            <td>{{ fmt(p.model) }}</td>
-            <td>{{ fmt(p.status) }}</td>
-            <td>{{ fmt(p.last_heartbeat_at) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>machine_id</th>
+              <th>modele</th>
+              <th>status</th>
+              <th>heartbeat</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="machines.length === 0">
+              <td colspan="4" class="muted">Aucune imprimante</td>
+            </tr>
+            <tr v-for="p in machines" :key="p.machine_id">
+              <td>{{ fmt(p.machine_id) }}</td>
+              <td>{{ fmt(p.model) }}</td>
+              <td>{{ fmt(p.status) }}</td>
+              <td>{{ fmt(p.last_heartbeat_at) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="card">
       <h2>Jobs</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>job_id</th>
-            <th>printer_id</th>
-            <th>status</th>
-            <th>progress</th>
-            <th>updated_at</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="jobs.length === 0">
-            <td colspan="5" class="muted">Aucun job</td>
-          </tr>
-          <tr v-for="j in jobs" :key="j.job_id">
-            <td>{{ fmt(j.job_id) }}</td>
-            <td>{{ fmt(j.printer_id) }}</td>
-            <td>{{ fmt(j.status) }}</td>
-            <td>{{ fmt(j.progress_pct) }}</td>
-            <td>{{ fmt(j.updated_at) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>job_id</th>
+              <th>printer_id</th>
+              <th>status</th>
+              <th>progress</th>
+              <th>updated_at</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="jobs.length === 0">
+              <td colspan="5" class="muted">Aucun job</td>
+            </tr>
+            <tr v-for="j in jobs" :key="j.job_id">
+              <td>{{ fmt(j.job_id) }}</td>
+              <td>{{ fmt(j.printer_id) }}</td>
+              <td>{{ fmt(j.status) }}</td>
+              <td>{{ fmt(j.progress_pct) }}</td>
+              <td>{{ fmt(j.updated_at) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   </main>
 </template>

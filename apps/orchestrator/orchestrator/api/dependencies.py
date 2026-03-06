@@ -15,11 +15,9 @@ from orchestrator.application.use_cases import (
     ListDeviceRuntimesUseCase,
     ListDeviceBindingRowsUseCase,
     ListFleetUseCase,
-    ListPrinterRuntimesUseCase,
     ListUnboundIpsUseCase,
     ListUnmatchedContractDevicesUseCase,
     MachineStatesPayloadUseCase,
-    MarkJobSentUseCase,
     PopNextCommandUseCase,
     SyncPrinterStateUseCase,
     UpsertBindingUseCase,
@@ -85,12 +83,6 @@ def get_fleet_view_service(
         printer_runtime_repo=printer_runtime_repo,
         device_runtime_repo=device_runtime_repo,
     )
-
-
-def get_list_printer_runtimes_use_case(
-    printer_runtime_repo: SqlModelPrinterRuntimeRepository = Depends(get_printer_runtime_repo),
-) -> ListPrinterRuntimesUseCase:
-    return ListPrinterRuntimesUseCase(printer_runtime_repo)
 
 
 def get_list_device_runtimes_use_case(
@@ -163,15 +155,6 @@ def get_ingest_device_state_use_case(
     domain_service: OrchestratorDomainService = Depends(get_domain_service),
 ) -> IngestDeviceStateUseCase:
     return IngestDeviceStateUseCase(device_runtime_repo, binding_repo, upsert_printer_runtime, domain_service)
-
-
-def get_mark_job_sent_use_case(
-    upsert_printer_runtime: UpsertPrinterRuntimeUseCase = Depends(get_upsert_printer_runtime_use_case),
-    binding_repo: SqlModelPrinterBindingRepository = Depends(get_binding_repo),
-    device_runtime_repo: SqlModelDeviceRuntimeRepository = Depends(get_device_runtime_repo),
-    domain_service: OrchestratorDomainService = Depends(get_domain_service),
-) -> MarkJobSentUseCase:
-    return MarkJobSentUseCase(upsert_printer_runtime, binding_repo, device_runtime_repo, domain_service)
 
 
 def get_binding_by_ip_use_case(

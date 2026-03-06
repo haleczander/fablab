@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import socket
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -10,7 +11,8 @@ PORT = int(os.getenv("PRUSALINK_SIM_PORT", "80"))
 PRINTER_NAME = os.getenv("PRINTER_NAME", "PrusaLink Sim")
 PRINTER_SERIAL = os.getenv("PRINTER_SERIAL", "SIM-UNKNOWN-SN")
 PRINTER_MODEL = os.getenv("PRINTER_MODEL", "MK4")
-PRINT_DURATION_S = max(30, int(os.getenv("PRINT_DURATION_S", "900")))
+PRINT_DURATION_MIN_S = max(5, int(os.getenv("PRINT_DURATION_MIN_S", "5")))
+PRINT_DURATION_MAX_S = max(PRINT_DURATION_MIN_S, int(os.getenv("PRINT_DURATION_MAX_S", "25")))
 
 
 class PrinterState:
@@ -18,16 +20,18 @@ class PrinterState:
         self.current_job_id: int | None = None
         self.current_file_path: str | None = None
         self.started_at: float | None = None
+        self.current_duration_s: int | None = None
         self.job_counter = 1000
 
     def _refresh(self) -> None:
-        if self.current_job_id is None or self.started_at is None:
+        if self.current_job_id is None or self.started_at is None or self.current_duration_s is None:
             return
         elapsed = max(0.0, time.time() - self.started_at)
-        if elapsed >= PRINT_DURATION_S:
+        if elapsed >= self.current_duration_s:
             self.current_job_id = None
             self.current_file_path = None
             self.started_at = None
+            self.current_duration_s = None
 
     def start_print(self, file_path: str) -> int:
         self._refresh()
@@ -35,15 +39,16 @@ class PrinterState:
         self.current_job_id = self.job_counter
         self.current_file_path = file_path
         self.started_at = time.time()
+        self.current_duration_s = random.randint(PRINT_DURATION_MIN_S, PRINT_DURATION_MAX_S)
         return self.current_job_id
 
     def job_payload(self) -> dict | None:
         self._refresh()
-        if self.current_job_id is None or self.started_at is None:
+        if self.current_job_id is None or self.started_at is None or self.current_duration_s is None:
             return None
         elapsed = max(0, int(time.time() - self.started_at))
-        progress = min(100.0, round((elapsed / PRINT_DURATION_S) * 100.0, 2))
-        remaining = max(0, PRINT_DURATION_S - elapsed)
+        progress = min(100.0, round((elapsed / self.current_duration_s) * 100.0, 2))
+        remaining = max(0, self.current_duration_s - elapsed)
         return {
             "id": self.current_job_id,
             "state": "PRINTING",
@@ -62,12 +67,16 @@ class PrinterState:
     def status_payload(self) -> dict:
         job = self.job_payload()
         if job:
+            p = float(job["progress"])
+            # Warm-up then steady-state temperatures tied to progress.
+            nozzle = 170.0 + min(45.0, p * 0.5)
+            bed = 45.0 + min(15.0, p * 0.2)
             return {
                 "printer": {
                     "state": "PRINTING",
-                    "temp_nozzle": 215.0,
+                    "temp_nozzle": round(nozzle, 1),
                     "target_nozzle": 215.0,
-                    "temp_bed": 60.0,
+                    "temp_bed": round(bed, 1),
                     "target_bed": 60.0,
                 },
                 "job": {
@@ -171,7 +180,13 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"[PRUSALINK-SIM] listening on {HOST}:{PORT} serial={PRINTER_SERIAL} model={PRINTER_MODEL}", flush=True)
+    print(
+        (
+            f"[PRUSALINK-SIM] listening on {HOST}:{PORT} serial={PRINTER_SERIAL} "
+            f"model={PRINTER_MODEL} duration=[{PRINT_DURATION_MIN_S}-{PRINT_DURATION_MAX_S}]s"
+        ),
+        flush=True,
+    )
     server.serve_forever()
 
 

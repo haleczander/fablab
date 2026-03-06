@@ -10,3 +10,7 @@ class DeviceIngestInput(BaseModel):
     bed_temp_c: float | None = None
     current_job_id: str | None = None
 
+
+class DeviceIgnoreInput(BaseModel):
+    is_ignored: bool
+

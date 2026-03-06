@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from orchestrator.api.dependencies import (
     get_binding_by_mac_use_case,
     get_binding_by_ip_use_case,
     get_binding_by_serial_use_case,
+    get_device_runtime_repo,
     get_ingest_device_state_use_case,
+    get_list_device_binding_rows_use_case,
     get_list_device_runtimes_use_case,
     get_list_fleet_use_case,
     get_list_unmatched_contract_devices_use_case,
@@ -12,12 +14,13 @@ from orchestrator.api.dependencies import (
     get_machine_states_payload_use_case,
     get_pop_next_command_use_case,
 )
-from orchestrator.api.events import broadcast_events, broadcast_machines
+from orchestrator.api.events import broadcast_devices, broadcast_events, broadcast_machines
 from orchestrator.application.use_cases import (
     GetBindingByMacUseCase,
     GetBindingByIpUseCase,
     GetBindingBySerialUseCase,
     IngestDeviceStateUseCase,
+    ListDeviceBindingRowsUseCase,
     ListDeviceRuntimesUseCase,
     ListFleetUseCase,
     ListUnmatchedContractDevicesUseCase,
@@ -27,7 +30,8 @@ from orchestrator.application.use_cases import (
 )
 from orchestrator.domain.models import DeviceRuntime
 from orchestrator.domain.mac import normalize_mac
-from orchestrator.domain.schemas import DeviceIngestInput
+from orchestrator.domain.schemas import DeviceIgnoreInput, DeviceIngestInput
+from orchestrator.infrastructure.repositories import SqlModelDeviceRuntimeRepository
 
 router = APIRouter(tags=["orchestrator"])
 
@@ -49,10 +53,11 @@ async def ingest_device_state(
     list_unmatched_contract_devices_use_case: ListUnmatchedContractDevicesUseCase = Depends(
         get_list_unmatched_contract_devices_use_case
     ),
+    list_device_binding_rows_use_case: ListDeviceBindingRowsUseCase = Depends(get_list_device_binding_rows_use_case),
     machine_states_use_case: MachineStatesPayloadUseCase = Depends(get_machine_states_payload_use_case),
 ) -> DeviceRuntime:
     source_ip = request.client.host if request.client else "0.0.0.0"
-    device, runtime = ingest_device_state_use_case.execute(source_ip, payload)
+    device, runtime, is_new_device = ingest_device_state_use_case.execute(source_ip, payload)
     await broadcast_events("device_updated", device.model_dump(mode="json"))
     if runtime:
         await broadcast_events("runtime_updated", runtime.model_dump(mode="json"))
@@ -64,8 +69,26 @@ async def ingest_device_state(
             "unmatched_contract_devices": list_unmatched_contract_devices_use_case.execute(),
         },
     )
+    if is_new_device:
+        await broadcast_devices("devices_snapshot", list_device_binding_rows_use_case.execute())
     await broadcast_machines("machines_updated", machine_states_use_case.execute())
     return device
+
+
+@router.patch("/devices/{device_id}/ignored", response_model=DeviceRuntime)
+async def set_device_ignored(
+    device_id: int,
+    payload: DeviceIgnoreInput,
+    device_runtime_repo: SqlModelDeviceRuntimeRepository = Depends(get_device_runtime_repo),
+    list_device_binding_rows_use_case: ListDeviceBindingRowsUseCase = Depends(get_list_device_binding_rows_use_case),
+) -> DeviceRuntime:
+    row = device_runtime_repo.get_by_id(device_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="device not found")
+    row.is_ignored = payload.is_ignored
+    updated = device_runtime_repo.save(row)
+    await broadcast_devices("devices_snapshot", list_device_binding_rows_use_case.execute())
+    return updated
 
 
 @router.get("/devices/commands/next")

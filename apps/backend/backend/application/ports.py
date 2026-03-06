@@ -31,6 +31,12 @@ class JobRepositoryPort(Protocol):
 
 
 class OrchestratorGatewayPort(Protocol):
-    def enqueue_start_print(self, printer_id: str, job_id: str, est_duration_s: int) -> None:
+    def enqueue_start_print(
+        self,
+        printer_id: str,
+        job_id: str,
+        est_duration_s: int,
+        printer_file_path: str | None = None,
+    ) -> None:
         ...
 

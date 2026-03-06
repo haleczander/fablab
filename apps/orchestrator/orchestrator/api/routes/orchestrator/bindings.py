@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends
 
 from orchestrator.api.dependencies import (
+    get_list_device_binding_rows_use_case,
     get_list_fleet_use_case,
     get_list_unmatched_contract_devices_use_case,
     get_list_unbound_ips_use_case,
     get_machine_states_payload_use_case,
     get_upsert_binding_use_case,
 )
-from orchestrator.api.events import broadcast_events, broadcast_machines
+from orchestrator.api.events import broadcast_devices, broadcast_events, broadcast_machines
 from orchestrator.application.use_cases import (
+    ListDeviceBindingRowsUseCase,
     ListFleetUseCase,
     ListUnmatchedContractDevicesUseCase,
     ListUnboundIpsUseCase,
@@ -31,6 +33,7 @@ async def bind_printer(
     list_unmatched_contract_devices_use_case: ListUnmatchedContractDevicesUseCase = Depends(
         get_list_unmatched_contract_devices_use_case
     ),
+    list_device_binding_rows_use_case: ListDeviceBindingRowsUseCase = Depends(get_list_device_binding_rows_use_case),
     machine_states_use_case: MachineStatesPayloadUseCase = Depends(get_machine_states_payload_use_case),
 ) -> PrinterBinding:
     row = upsert_binding_use_case.execute(
@@ -47,6 +50,7 @@ async def bind_printer(
             "unmatched_contract_devices": list_unmatched_contract_devices_use_case.execute(),
         },
     )
+    await broadcast_devices("devices_snapshot", list_device_binding_rows_use_case.execute())
     await broadcast_machines("machines_updated", machine_states_use_case.execute())
     return row
 
