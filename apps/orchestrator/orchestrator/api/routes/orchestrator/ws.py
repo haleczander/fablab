@@ -25,10 +25,10 @@ from orchestrator.application.use_cases import (
     MachineStatesPayloadUseCase,
 )
 
-router = APIRouter(tags=["orchestrator"])
+router = APIRouter(prefix="/ws", tags=["orchestrator"])
 
 
-@router.websocket("/ws/events")
+@router.websocket("/events")
 async def ws_events(
     websocket: WebSocket,
     list_fleet_use_case: ListFleetUseCase = Depends(get_list_fleet_use_case),
@@ -57,7 +57,7 @@ async def ws_events(
             ws_events_clients.discard(websocket)
 
 
-@router.websocket("/ws/machines")
+@router.websocket("/machines")
 async def ws_machines(
     websocket: WebSocket,
     machine_states_use_case: MachineStatesPayloadUseCase = Depends(get_machine_states_payload_use_case),
@@ -78,7 +78,7 @@ async def ws_machines(
             ws_machine_clients.discard(websocket)
 
 
-@router.websocket("/ws/devices")
+@router.websocket("/devices")
 async def ws_devices(
     websocket: WebSocket,
     list_device_binding_rows_use_case: ListDeviceBindingRowsUseCase = Depends(get_list_device_binding_rows_use_case),

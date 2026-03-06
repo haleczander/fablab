@@ -96,3 +96,8 @@ def probe_device(ip: str, timeout_s: float) -> ProbeResult:
         return ProbeResult(adapter_name="http-unknown", reachable=True, model_hint=None, details=f"/ -> {status}")
     return ProbeResult(adapter_name="unreachable", reachable=False, model_hint=None, details=None)
 
+
+class HttpDeviceProber:
+    def probe(self, ip: str, timeout_s: float) -> ProbeResult:
+        return probe_device(ip=ip, timeout_s=timeout_s)
+

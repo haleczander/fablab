@@ -3,20 +3,9 @@ from __future__ import annotations
 import ipaddress
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Callable, Protocol
 
-from orchestrator.application.ports import ArpNeighborScannerPort
+from orchestrator.application.ports import ArpNeighborScannerPort, DeviceProberPort
 from orchestrator.domain.mac import normalize_mac
-
-
-class _ProbeResultLike(Protocol):
-    adapter_name: str
-    reachable: bool
-    model_hint: str | None
-    serial_hint: str | None
-
-
-ProbeDeviceFn = Callable[[str, float], _ProbeResultLike]
 
 
 @dataclass(frozen=True)
@@ -34,9 +23,9 @@ class DiscoverNetworkHostsResult:
 
 
 class DiscoverNetworkHostsUseCase:
-    def __init__(self, arp_scanner: ArpNeighborScannerPort, probe_device_fn: ProbeDeviceFn) -> None:
+    def __init__(self, arp_scanner: ArpNeighborScannerPort, device_prober: DeviceProberPort) -> None:
         self._arp_scanner = arp_scanner
-        self._probe_device_fn = probe_device_fn
+        self._device_prober = device_prober
 
     def execute(
         self,
@@ -73,7 +62,7 @@ class DiscoverNetworkHostsUseCase:
         hosts: dict[str, DiscoveredHost] = {}
         with ThreadPoolExecutor(max_workers=min(64, len(candidate_ips) or 1)) as pool:
             futures = {
-                pool.submit(self._probe_device_fn, ip, timeout_s): ip
+                pool.submit(self._device_prober.probe, ip, timeout_s): ip
                 for ip in candidate_ips
             }
             for future in as_completed(futures):

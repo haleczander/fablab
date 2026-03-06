@@ -2,17 +2,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from orchestrator.api.dependencies import (
-    get_binding_by_printer_id_use_case,
-    get_create_printer_job_use_case,
-    get_enqueue_start_command_use_case,
-    get_list_fleet_use_case,
-    get_list_unmatched_contract_devices_use_case,
-    get_list_unbound_ips_use_case,
-    get_machine_states_payload_use_case,
-    get_printer_machine_info_use_case,
-    get_sync_printer_state_use_case,
-)
+from orchestrator.api import dependencies
 from orchestrator.api.events import broadcast_events, broadcast_machines
 from orchestrator.application.use_cases import (
     CreatePrinterJobUseCase,
@@ -20,30 +10,32 @@ from orchestrator.application.use_cases import (
     GetBindingByPrinterIdUseCase,
     GetPrinterMachineInfoUseCase,
     ListFleetUseCase,
-    ListUnmatchedContractDevicesUseCase,
     ListUnboundIpsUseCase,
+    ListUnmatchedContractDevicesUseCase,
     MachineStatesPayloadUseCase,
     SyncPrinterStateUseCase,
 )
 from orchestrator.domain.models import PrinterRuntime
 from orchestrator.domain.schemas import StartPrintCommandInput
 
-router = APIRouter(tags=["orchestrator"])
+router = APIRouter(prefix="/printers", tags=["orchestrator"])
 
 
-@router.post("/printers/{printer_id}/commands/start")
+@router.post("/{printer_id}/commands/start")
 async def command_start_print(
     printer_id: str,
     payload: StartPrintCommandInput,
-    binding_by_printer_use_case: GetBindingByPrinterIdUseCase = Depends(get_binding_by_printer_id_use_case),
-    enqueue_start_command_use_case: EnqueueStartPrintCommandUseCase = Depends(get_enqueue_start_command_use_case),
-    create_printer_job_use_case: CreatePrinterJobUseCase = Depends(get_create_printer_job_use_case),
-    list_fleet_use_case: ListFleetUseCase = Depends(get_list_fleet_use_case),
-    list_unbound_ips_use_case: ListUnboundIpsUseCase = Depends(get_list_unbound_ips_use_case),
-    list_unmatched_contract_devices_use_case: ListUnmatchedContractDevicesUseCase = Depends(
-        get_list_unmatched_contract_devices_use_case
+    binding_by_printer_use_case: GetBindingByPrinterIdUseCase = Depends(dependencies.dep(GetBindingByPrinterIdUseCase)),
+    enqueue_start_command_use_case: EnqueueStartPrintCommandUseCase = Depends(
+        dependencies.dep(EnqueueStartPrintCommandUseCase)
     ),
-    machine_states_use_case: MachineStatesPayloadUseCase = Depends(get_machine_states_payload_use_case),
+    create_printer_job_use_case: CreatePrinterJobUseCase = Depends(dependencies.dep(CreatePrinterJobUseCase)),
+    list_fleet_use_case: ListFleetUseCase = Depends(dependencies.dep(ListFleetUseCase)),
+    list_unbound_ips_use_case: ListUnboundIpsUseCase = Depends(dependencies.dep(ListUnboundIpsUseCase)),
+    list_unmatched_contract_devices_use_case: ListUnmatchedContractDevicesUseCase = Depends(
+        dependencies.dep(ListUnmatchedContractDevicesUseCase)
+    ),
+    machine_states_use_case: MachineStatesPayloadUseCase = Depends(dependencies.dep(MachineStatesPayloadUseCase)),
 ) -> dict[str, str | int]:
     binding = binding_by_printer_use_case.execute(printer_id)
     if not binding:
@@ -80,10 +72,10 @@ async def command_start_print(
     return out
 
 
-@router.get("/printers/{printer_id}/machine-info")
+@router.get("/{printer_id}/machine-info")
 def get_machine_info(
     printer_id: str,
-    machine_info_use_case: GetPrinterMachineInfoUseCase = Depends(get_printer_machine_info_use_case),
+    machine_info_use_case: GetPrinterMachineInfoUseCase = Depends(dependencies.dep(GetPrinterMachineInfoUseCase)),
 ) -> dict:
     try:
         return machine_info_use_case.execute(printer_id)
@@ -95,16 +87,16 @@ def get_machine_info(
         raise HTTPException(status_code=502, detail=str(err)) from err
 
 
-@router.post("/printers/{printer_id}/state/sync", response_model=PrinterRuntime)
+@router.post("/{printer_id}/state/sync", response_model=PrinterRuntime)
 async def sync_machine_state(
     printer_id: str,
-    sync_state_use_case: SyncPrinterStateUseCase = Depends(get_sync_printer_state_use_case),
-    list_fleet_use_case: ListFleetUseCase = Depends(get_list_fleet_use_case),
-    list_unbound_ips_use_case: ListUnboundIpsUseCase = Depends(get_list_unbound_ips_use_case),
+    sync_state_use_case: SyncPrinterStateUseCase = Depends(dependencies.dep(SyncPrinterStateUseCase)),
+    list_fleet_use_case: ListFleetUseCase = Depends(dependencies.dep(ListFleetUseCase)),
+    list_unbound_ips_use_case: ListUnboundIpsUseCase = Depends(dependencies.dep(ListUnboundIpsUseCase)),
     list_unmatched_contract_devices_use_case: ListUnmatchedContractDevicesUseCase = Depends(
-        get_list_unmatched_contract_devices_use_case
+        dependencies.dep(ListUnmatchedContractDevicesUseCase)
     ),
-    machine_states_use_case: MachineStatesPayloadUseCase = Depends(get_machine_states_payload_use_case),
+    machine_states_use_case: MachineStatesPayloadUseCase = Depends(dependencies.dep(MachineStatesPayloadUseCase)),
 ) -> PrinterRuntime:
     try:
         runtime = sync_state_use_case.execute(printer_id)

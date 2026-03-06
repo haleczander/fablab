@@ -1,7 +1,7 @@
 import ipaddress
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from orchestrator.infrastructure.adapters import ProbeResult, probe_device
+from orchestrator.infrastructure.network_discovery.device_probers import ProbeResult, probe_device
 
 
 def scan_cidr(cidr: str, timeout_s: float, max_hosts: int) -> list[tuple[str, ProbeResult]]:

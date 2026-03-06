@@ -1,9 +1,24 @@
+function computeBasePath() {
+  const path = String(location.pathname || "");
+  const match = path.match(/^(.*)\/dashboard\/?$/);
+  if (match) return match[1] || "";
+  return "";
+}
+
+const BASE_PATH = computeBasePath();
+
+function apiUrl(path) {
+  const clean = String(path || "");
+  if (!clean.startsWith("/")) return `${BASE_PATH}/${clean}`;
+  return `${BASE_PATH}${clean}`;
+}
+
 async function api(path, opts = {}) {
   const { timeout_ms, ...fetchOpts } = opts;
   const timeoutMs = Number(timeout_ms) || 0;
   const controller = timeoutMs > 0 ? new AbortController() : null;
   const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-  const r = await fetch(path, {
+  const r = await fetch(apiUrl(path), {
     headers: { "Content-Type": "application/json" },
     ...fetchOpts,
     ...(controller ? { signal: controller.signal } : {}),
@@ -344,7 +359,7 @@ function renderDevices(rows) {
 
 function connectDevicesWs() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${location.host}/ws/devices`);
+  const ws = new WebSocket(`${proto}://${location.host}${apiUrl("/ws/devices")}`);
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data);
@@ -361,7 +376,7 @@ function connectDevicesWs() {
 
 function connectMachinesWs() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${location.host}/ws/machines`);
+  const ws = new WebSocket(`${proto}://${location.host}${apiUrl("/ws/machines")}`);
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data);

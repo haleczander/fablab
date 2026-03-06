@@ -11,8 +11,8 @@ from config import (
     ORCH_DISCOVERY_TIMEOUT_S,
 )
 from orchestrator.api.routes.orchestrator import router as orchestrator_router
-from orchestrator.infrastructure.db import init_db
-from orchestrator.infrastructure.discovery_runtime import bound_refresh_loop, discovery_loop
+from orchestrator.infrastructure.network_discovery.runtime import bound_refresh_loop, discovery_loop
+from orchestrator.infrastructure.persistence.db import init_db
 
 app = FastAPI(title="fablab-local-orchestrator")
 _discovery_stop_event: asyncio.Event | None = None

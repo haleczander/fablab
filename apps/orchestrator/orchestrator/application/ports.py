@@ -48,3 +48,19 @@ class PrinterAdapterResolverPort(Protocol):
 class ArpNeighborScannerPort(Protocol):
     def scan(self, network: str, subnet_mask: str, timeout_s: float) -> dict[str, str]: ...
 
+
+class DeviceProbeResultPort(Protocol):
+    adapter_name: str
+    reachable: bool
+    model_hint: str | None
+    serial_hint: str | None
+
+
+class DeviceProberPort(Protocol):
+    def probe(self, ip: str, timeout_s: float) -> DeviceProbeResultPort: ...
+
+
+class DiscoverySnapshotPort(Protocol):
+    def list_rows(self) -> list[dict[str, str | bool | int | float | None]]: ...
+    def replace_rows(self, rows: list[dict[str, str | bool | int | float | None]]) -> None: ...
+

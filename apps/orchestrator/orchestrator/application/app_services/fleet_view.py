@@ -3,7 +3,7 @@ from orchestrator.application.ports import (
     PrinterBindingRepositoryPort,
     PrinterRuntimeRepositoryPort,
 )
-from orchestrator.infrastructure.live_machine_state import get_machine_state
+from orchestrator.infrastructure.state.live_machine_state import get_machine_state
 
 
 class FleetViewService:

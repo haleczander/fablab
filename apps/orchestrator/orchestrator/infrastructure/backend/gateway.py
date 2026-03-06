@@ -1,4 +1,4 @@
-from orchestrator.infrastructure.backend_client import post_printer_state
+from orchestrator.infrastructure.backend.client import post_printer_state
 
 
 class BackendGateway:

@@ -15,7 +15,11 @@ from orchestrator.application.use_cases.list_unbound_ips import ListUnboundIpsUs
 from orchestrator.application.use_cases.list_unmatched_contract_devices import ListUnmatchedContractDevicesUseCase
 from orchestrator.application.use_cases.machine_states_payload import MachineStatesPayloadUseCase
 from orchestrator.application.use_cases.pop_next_command import PopNextCommandUseCase
+from orchestrator.application.use_cases.refresh_network_discovery import RefreshNetworkDiscoveryUseCase
+from orchestrator.application.use_cases.set_device_ignored import SetDeviceIgnoredUseCase
+from orchestrator.application.use_cases.set_device_ignored_by_mac import SetDeviceIgnoredByMacUseCase
 from orchestrator.application.use_cases.sync_printer_state import SyncPrinterStateUseCase
+from orchestrator.application.use_cases.unbind_printer import UnbindPrinterUseCase
 from orchestrator.application.use_cases.upsert_binding import UpsertBindingUseCase
 from orchestrator.application.use_cases.upsert_printer_runtime import UpsertPrinterRuntimeUseCase
 
@@ -37,7 +41,11 @@ __all__ = [
     "ListUnmatchedContractDevicesUseCase",
     "MachineStatesPayloadUseCase",
     "PopNextCommandUseCase",
+    "RefreshNetworkDiscoveryUseCase",
+    "SetDeviceIgnoredUseCase",
+    "SetDeviceIgnoredByMacUseCase",
     "SyncPrinterStateUseCase",
+    "UnbindPrinterUseCase",
     "UpsertBindingUseCase",
     "UpsertPrinterRuntimeUseCase",
 ]

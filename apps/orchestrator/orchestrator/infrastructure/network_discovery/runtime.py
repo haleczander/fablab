@@ -12,16 +12,16 @@ from orchestrator.api.events import broadcast_machines
 from orchestrator.application.app_services import FleetViewService
 from orchestrator.domain.mac import normalize_mac
 from orchestrator.domain.models import DeviceRuntime, PrinterBinding
-from orchestrator.infrastructure.adapters import probe_device
-from orchestrator.infrastructure.discovery_cache import build_rows_from_discovery, list_snapshot_rows, replace_snapshot
-from orchestrator.infrastructure.db import engine
-from orchestrator.infrastructure.live_machine_state import upsert_machine_state
-from orchestrator.infrastructure.scapy_arp_scanner import ScapyArpNeighborScanner
-from orchestrator.infrastructure.repositories import (
+from orchestrator.infrastructure.network_discovery.arp_scanner import ScapyArpNeighborScanner
+from orchestrator.infrastructure.network_discovery.cache import build_rows_from_discovery, list_snapshot_rows, replace_snapshot
+from orchestrator.infrastructure.network_discovery.device_probers import probe_device
+from orchestrator.infrastructure.persistence.db import engine
+from orchestrator.infrastructure.persistence.repositories import (
     SqlModelDeviceRuntimeRepository,
     SqlModelPrinterBindingRepository,
     SqlModelPrinterRuntimeRepository,
 )
+from orchestrator.infrastructure.state.live_machine_state import upsert_machine_state
 
 
 def _parse_cidrs(raw: str) -> list[str]:
