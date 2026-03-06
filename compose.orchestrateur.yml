@@ -25,10 +25,6 @@ services:
     environment:
       APP_MODULE: main:app
       APP_PORT: 8001
-      ORCH_DATABASE_URL: ${ORCH_DATABASE_URL}
-      BACKEND_API_URL: ${BACKEND_API_URL}
-      BACKEND_API_TOKEN: ${BACKEND_API_TOKEN}
-      BACKEND_TIMEOUT_S: ${BACKEND_TIMEOUT_S}
     expose:
       - "8001"
     volumes:

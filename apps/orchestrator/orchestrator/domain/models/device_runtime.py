@@ -10,6 +10,7 @@ class DeviceRuntime(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     device_ip: str = Field(index=True, unique=True)
     device_mac: Optional[str] = Field(default=None, index=True, unique=True)
+    device_serial: Optional[str] = Field(default=None, index=True, unique=True)
     is_bound: bool = Field(default=False)
     bound_printer_id: Optional[str] = Field(default=None, index=True)
     detected_model: Optional[str] = None
@@ -23,4 +24,5 @@ class DeviceRuntime(SQLModel, table=True):
     bed_temp_c: Optional[float] = None
     last_printer_ip: Optional[str] = None
     last_printer_mac: Optional[str] = None
+    last_printer_serial: Optional[str] = None
 

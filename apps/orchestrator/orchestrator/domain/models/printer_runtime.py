@@ -17,4 +17,5 @@ class PrinterRuntime(SQLModel, table=True):
     bed_temp_c: Optional[float] = None
     last_printer_ip: Optional[str] = None
     last_printer_mac: Optional[str] = None
+    last_printer_serial: Optional[str] = None
 

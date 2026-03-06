@@ -1,9 +1,12 @@
+import asyncio
 import json
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from orchestrator.api.dependencies import (
+    get_list_device_binding_rows_use_case,
     get_list_fleet_use_case,
+    get_list_unmatched_contract_devices_use_case,
     get_list_unbound_ips_use_case,
     get_machine_states_payload_use_case,
 )
@@ -13,7 +16,13 @@ from orchestrator.api.events import (
     ws_machine_clients,
     ws_machine_lock,
 )
-from orchestrator.application.use_cases import ListFleetUseCase, ListUnboundIpsUseCase, MachineStatesPayloadUseCase
+from orchestrator.application.use_cases import (
+    ListDeviceBindingRowsUseCase,
+    ListFleetUseCase,
+    ListUnboundIpsUseCase,
+    ListUnmatchedContractDevicesUseCase,
+    MachineStatesPayloadUseCase,
+)
 
 router = APIRouter(tags=["orchestrator"])
 
@@ -23,6 +32,9 @@ async def ws_events(
     websocket: WebSocket,
     list_fleet_use_case: ListFleetUseCase = Depends(get_list_fleet_use_case),
     list_unbound_ips_use_case: ListUnboundIpsUseCase = Depends(get_list_unbound_ips_use_case),
+    list_unmatched_contract_devices_use_case: ListUnmatchedContractDevicesUseCase = Depends(
+        get_list_unmatched_contract_devices_use_case
+    ),
 ) -> None:
     await websocket.accept()
     with ws_events_lock:
@@ -31,6 +43,7 @@ async def ws_events(
         snapshot = {
             "fleet": list_fleet_use_case.execute(),
             "unbound_ips": list_unbound_ips_use_case.execute(),
+            "unmatched_contract_devices": list_unmatched_contract_devices_use_case.execute(),
         }
         await websocket.send_text(json.dumps({"event": "snapshot", "payload": snapshot}))
         while True:
@@ -62,4 +75,19 @@ async def ws_machines(
     finally:
         with ws_machine_lock:
             ws_machine_clients.discard(websocket)
+
+
+@router.websocket("/ws/devices")
+async def ws_devices(
+    websocket: WebSocket,
+    list_device_binding_rows_use_case: ListDeviceBindingRowsUseCase = Depends(get_list_device_binding_rows_use_case),
+) -> None:
+    await websocket.accept()
+    try:
+        while True:
+            rows = list_device_binding_rows_use_case.execute()
+            await websocket.send_text(json.dumps({"event": "devices_snapshot", "payload": rows}))
+            await asyncio.sleep(3)
+    except WebSocketDisconnect:
+        pass
 

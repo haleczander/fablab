@@ -24,22 +24,29 @@ class IngestDeviceStateUseCase:
 
     def execute(self, source_ip: str, data: DeviceIngestInput) -> tuple[DeviceRuntime, PrinterRuntime | None]:
         source_mac = normalize_mac(data.mac_address)
+        source_serial = data.serial_number.strip() if data.serial_number else None
 
-        device = self.device_runtime_repo.get_by_mac(source_mac) if source_mac else None
+        device = self.device_runtime_repo.get_by_serial(source_serial) if source_serial else None
+        if not device:
+            device = self.device_runtime_repo.get_by_mac(source_mac) if source_mac else None
         if not device:
             device = self.device_runtime_repo.get_by_ip(source_ip)
         if not device:
-            device = self.domain_service.new_device_runtime(source_ip, source_mac)
+            device = self.domain_service.new_device_runtime(source_ip, source_mac, source_serial)
         elif source_mac and not device.device_mac:
             device.device_mac = source_mac
+        if source_serial and not device.device_serial:
+            device.device_serial = source_serial
 
-        binding = self.binding_repo.get_by_mac(source_mac) if source_mac else None
+        binding = self.binding_repo.get_by_serial(source_serial) if source_serial else None
+        if not binding:
+            binding = self.binding_repo.get_by_mac(source_mac) if source_mac else None
         if not binding:
             binding = self.binding_repo.get_by_ip(source_ip)
         device.is_bound = binding is not None
         device.bound_printer_id = binding.printer_id if binding else None
 
-        self.domain_service.apply_device_state(device, data, source_ip, source_mac)
+        self.domain_service.apply_device_state(device, data, source_ip, source_mac, source_serial)
         saved_device = self.device_runtime_repo.save(device)
 
         if not binding:
@@ -57,6 +64,7 @@ class IngestDeviceStateUseCase:
             data=printer_state,
             source_printer_ip=source_ip,
             source_printer_mac=source_mac,
+            source_printer_serial=source_serial,
         )
         return saved_device, runtime
 

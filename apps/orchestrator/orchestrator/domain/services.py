@@ -30,6 +30,7 @@ class OrchestratorDomainService:
         printer_id: str,
         printer_ip: str | None,
         printer_mac: str | None,
+        printer_serial: str | None,
         printer_model: str | None,
         adapter_name: str | None,
     ) -> PrinterBinding:
@@ -37,6 +38,7 @@ class OrchestratorDomainService:
             printer_id=printer_id,
             printer_ip=printer_ip,
             printer_mac=printer_mac,
+            printer_serial=printer_serial,
             printer_model=printer_model,
             adapter_name=adapter_name,
         )
@@ -46,8 +48,13 @@ class OrchestratorDomainService:
         row.last_heartbeat_at = now_utc()
         return row
 
-    def new_device_runtime(self, device_ip: str, device_mac: str | None = None) -> DeviceRuntime:
-        row = DeviceRuntime(device_ip=device_ip, device_mac=device_mac)
+    def new_device_runtime(
+        self,
+        device_ip: str,
+        device_mac: str | None = None,
+        device_serial: str | None = None,
+    ) -> DeviceRuntime:
+        row = DeviceRuntime(device_ip=device_ip, device_mac=device_mac, device_serial=device_serial)
         row.last_heartbeat_at = now_utc()
         return row
 
@@ -57,6 +64,7 @@ class OrchestratorDomainService:
         data: PrinterStateInput,
         source_printer_ip: str | None = None,
         source_printer_mac: str | None = None,
+        source_printer_serial: str | None = None,
     ) -> PrinterRuntime:
         status = self.normalize_status(data.status)
         if self.should_refresh_heartbeat(row.last_heartbeat_at, row.status != status):
@@ -71,6 +79,8 @@ class OrchestratorDomainService:
             row.last_printer_ip = source_printer_ip
         if source_printer_mac is not None:
             row.last_printer_mac = source_printer_mac
+        if source_printer_serial is not None:
+            row.last_printer_serial = source_printer_serial
         return row
 
     def apply_device_state(
@@ -79,6 +89,7 @@ class OrchestratorDomainService:
         data: DeviceIngestInput,
         source_ip: str,
         source_mac: str | None = None,
+        source_serial: str | None = None,
     ) -> DeviceRuntime:
         status = self.normalize_status(data.status)
         if self.should_refresh_heartbeat(row.last_heartbeat_at, row.status != status):
@@ -93,6 +104,9 @@ class OrchestratorDomainService:
         if source_mac is not None:
             row.device_mac = source_mac
             row.last_printer_mac = source_mac
+        if source_serial is not None:
+            row.device_serial = source_serial
+            row.last_printer_serial = source_serial
         return row
 
     def mark_job_sent(self, row: PrinterRuntime, job_id: str) -> PrinterRuntime:
@@ -110,5 +124,6 @@ class OrchestratorDomainService:
             "nozzle_temp_c": row.nozzle_temp_c,
             "bed_temp_c": row.bed_temp_c,
             "current_job_id": row.current_job_id,
+            "last_printer_serial": row.last_printer_serial,
         }
 

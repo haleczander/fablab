@@ -33,7 +33,6 @@
         <thead>
           <tr>
             <th>machine_id</th>
-            <th>ip</th>
             <th>modele</th>
             <th>status</th>
             <th>heartbeat</th>
@@ -41,11 +40,10 @@
         </thead>
         <tbody>
           <tr v-if="machines.length === 0">
-            <td colspan="5" class="muted">Aucune imprimante</td>
+            <td colspan="4" class="muted">Aucune imprimante</td>
           </tr>
           <tr v-for="p in machines" :key="p.machine_id">
             <td>{{ fmt(p.machine_id) }}</td>
-            <td>{{ fmt(p.printer_ip) }}</td>
             <td>{{ fmt(p.model) }}</td>
             <td>{{ fmt(p.status) }}</td>
             <td>{{ fmt(p.last_heartbeat_at) }}</td>
@@ -90,7 +88,6 @@ const backendBase = config.public.backendBase as string
 type MachineRow = {
   machine_id: string
   printer_id?: string | null
-  printer_ip?: string | null
   printer_model?: string | null
   model?: string | null
   status: string

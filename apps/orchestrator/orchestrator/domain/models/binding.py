@@ -11,6 +11,7 @@ class PrinterBinding(SQLModel, table=True):
     printer_id: str = Field(index=True, unique=True)
     printer_ip: Optional[str] = Field(default=None, index=True, unique=True)
     printer_mac: Optional[str] = Field(default=None, index=True, unique=True)
+    printer_serial: Optional[str] = Field(default=None, index=True, unique=True)
     printer_model: Optional[str] = None
     adapter_name: Optional[str] = None
 

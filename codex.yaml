@@ -1,0 +1,56 @@
+spec_version: 1
+project: FABLAB
+language: fr
+
+ia_coding_contract:
+  objective: >
+    Eviter les répétitions de consignes et imposer un standard de conception/implémentation.
+
+  mandatory_rules:
+    - id: arch-clean-when-complex
+      rule: "Si un service est complexe, utiliser Clean Architecture."
+      details:
+        - "Séparer: controller/api, application(use_cases), domain, infrastructure(persistence/adapters)."
+        - "Dépendances dirigées vers le domaine (pas l'inverse)."
+
+    - id: one-file-one-business-object
+      rule: "Un fichier = un objet métier principal."
+      examples:
+        - "un controller par fichier"
+        - "un service par fichier"
+        - "un repository/persistence par fichier"
+        - "un use case par fichier"
+
+    - id: use-case-single-action
+      rule: "Un use case ne fait qu'une seule chose."
+      constraints:
+        - "Une responsabilité claire."
+        - "Pas de logique transverse non liée."
+        - "Composer plusieurs use cases plutôt que les fusionner."
+
+    - id: code-dry-simple
+      rule: "Code le plus DRY et simple possible."
+      constraints:
+        - "Extraire les duplications évidentes."
+        - "Privilégier la lisibilité à l'astuce."
+        - "Éviter la complexité prématurée (YAGNI)."
+
+    - id: no-polling
+      rule: "Polling interdit."
+      requirements:
+        - "Utiliser WebSocket (ou events push) pour le temps réel."
+        - "Le front ne doit pas faire de boucle de refresh HTTP."
+
+  delivery_checklist:
+    - "Architecture respectée si complexité non triviale."
+    - "Découpage fichier/objet respecté."
+    - "Use cases atomiques."
+    - "Aucune duplication non justifiée."
+    - "Aucun polling; WS/events en place."
+
+  pr_review_policy:
+    block_if:
+      - "Nouveau polling introduit."
+      - "Use case multi-responsabilités."
+      - "Mélange domain/infrastructure dans le même composant."
+      - "Fichier fourre-tout sans séparation claire."

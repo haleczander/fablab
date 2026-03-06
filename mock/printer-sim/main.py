@@ -2,105 +2,177 @@ import json
 import os
 import socket
 import time
-from urllib.error import URLError
-from urllib.request import Request, urlopen
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote
 
-ORCHESTRATOR_URL = os.getenv("ORCHESTRATOR_URL", "http://orchestrateur:8001").rstrip("/")
-TICK_SECONDS = float(os.getenv("TICK_SECONDS", "15"))
-PRINTER_MAC = os.getenv("PRINTER_MAC", "").strip()
-
-
-def own_ip() -> str:
-    return socket.gethostbyname(socket.gethostname())
-
-
-def post_json(path: str, payload: dict) -> bool:
-    body = json.dumps(payload).encode("utf-8")
-    headers = {"Content-Type": "application/json"}
-    if PRINTER_MAC:
-        headers["X-Printer-MAC"] = PRINTER_MAC
-    request = Request(
-        url=f"{ORCHESTRATOR_URL}{path}",
-        data=body,
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urlopen(request, timeout=4):
-            return True
-    except (URLError, TimeoutError):
-        return False
+HOST = os.getenv("PRUSALINK_SIM_HOST", "0.0.0.0")
+PORT = int(os.getenv("PRUSALINK_SIM_PORT", "80"))
+PRINTER_NAME = os.getenv("PRINTER_NAME", "PrusaLink Sim")
+PRINTER_SERIAL = os.getenv("PRINTER_SERIAL", "SIM-UNKNOWN-SN")
+PRINTER_MODEL = os.getenv("PRINTER_MODEL", "MK4")
+PRINT_DURATION_S = max(30, int(os.getenv("PRINT_DURATION_S", "900")))
 
 
-def get_json(path: str) -> dict | None:
-    headers = {}
-    if PRINTER_MAC:
-        headers["X-Printer-MAC"] = PRINTER_MAC
-    request = Request(url=f"{ORCHESTRATOR_URL}{path}", headers=headers, method="GET")
-    try:
-        with urlopen(request, timeout=4) as response:
-            body = response.read().decode("utf-8")
-            return json.loads(body) if body else None
-    except (URLError, TimeoutError, json.JSONDecodeError):
-        return None
+class PrinterState:
+    def __init__(self) -> None:
+        self.current_job_id: int | None = None
+        self.current_file_path: str | None = None
+        self.started_at: float | None = None
+        self.job_counter = 1000
+
+    def _refresh(self) -> None:
+        if self.current_job_id is None or self.started_at is None:
+            return
+        elapsed = max(0.0, time.time() - self.started_at)
+        if elapsed >= PRINT_DURATION_S:
+            self.current_job_id = None
+            self.current_file_path = None
+            self.started_at = None
+
+    def start_print(self, file_path: str) -> int:
+        self._refresh()
+        self.job_counter += 1
+        self.current_job_id = self.job_counter
+        self.current_file_path = file_path
+        self.started_at = time.time()
+        return self.current_job_id
+
+    def job_payload(self) -> dict | None:
+        self._refresh()
+        if self.current_job_id is None or self.started_at is None:
+            return None
+        elapsed = max(0, int(time.time() - self.started_at))
+        progress = min(100.0, round((elapsed / PRINT_DURATION_S) * 100.0, 2))
+        remaining = max(0, PRINT_DURATION_S - elapsed)
+        return {
+            "id": self.current_job_id,
+            "state": "PRINTING",
+            "progress": progress,
+            "time_printing": elapsed,
+            "time_remaining": remaining,
+            "inaccurate_estimates": False,
+            "file": {
+                "name": (self.current_file_path or "").split("/")[-1] or "unknown.gcode",
+                "display_name": (self.current_file_path or "").split("/")[-1] or "unknown.gcode",
+                "path": "/".join((self.current_file_path or "/local").split("/")[:-1]) or "/local",
+                "m_timestamp": int(time.time()),
+            },
+        }
+
+    def status_payload(self) -> dict:
+        job = self.job_payload()
+        if job:
+            return {
+                "printer": {
+                    "state": "PRINTING",
+                    "temp_nozzle": 215.0,
+                    "target_nozzle": 215.0,
+                    "temp_bed": 60.0,
+                    "target_bed": 60.0,
+                },
+                "job": {
+                    "id": job["id"],
+                    "progress": job["progress"],
+                    "time_printing": job["time_printing"],
+                    "time_remaining": job["time_remaining"],
+                },
+            }
+        return {
+            "printer": {
+                "state": "IDLE",
+                "temp_nozzle": 32.0,
+                "target_nozzle": 0.0,
+                "temp_bed": 29.0,
+                "target_bed": 0.0,
+            }
+        }
 
 
-def push_state(status: str, progress: float, job_id: str | None) -> bool:
-    if status == "PRINTING":
-        nozzle = 205.0
-        bed = 60.0
-    else:
-        nozzle = 35.0
-        bed = 30.0
-
-    return post_json(
-        "/devices/state-ingest",
-        {
-            "mac_address": PRINTER_MAC or None,
-            "status": status,
-            "progress_pct": progress,
-            "nozzle_temp_c": nozzle,
-            "bed_temp_c": bed,
-            "current_job_id": job_id,
-        },
-    )
+STATE = PrinterState()
 
 
-def poll_command() -> dict | None:
-    return get_json("/devices/commands/next")
+class Handler(BaseHTTPRequestHandler):
+    server_version = "PrusaLinkSim/1.0"
+
+    def log_message(self, format: str, *args) -> None:
+        return
+
+    def _send_json(self, code: int, payload: dict | list) -> None:
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_text(self, code: int, payload: str) -> None:
+        body = payload.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self) -> None:  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path == "/":
+            self._send_text(200, "PrusaLink simulator")
+            return
+        if path == "/api/version":
+            self._send_json(200, {"api": "1.0.0", "server": "PrusaLink", "text": "PrusaLink simulator"})
+            return
+        if path == "/api/v1/info":
+            hostname = socket.gethostname()
+            self._send_json(
+                200,
+                {
+                    "name": f"{PRINTER_NAME} {PRINTER_MODEL}",
+                    "model": PRINTER_MODEL,
+                    "serial": PRINTER_SERIAL,
+                    "hostname": f"{hostname}.lan",
+                    "mmu": False,
+                    "farm_mode": False,
+                    "nozzle_diameter": 0.4,
+                    "min_extrusion_temp": 170,
+                    "sd_ready": True,
+                    "active_camera": False,
+                    "location": "sim-net",
+                },
+            )
+            return
+        if path == "/api/v1/status":
+            self._send_json(200, STATE.status_payload())
+            return
+        if path == "/api/v1/job":
+            job = STATE.job_payload()
+            if not job:
+                self.send_response(204)
+                self.end_headers()
+                return
+            self._send_json(200, job)
+            return
+        self._send_text(404, "Not found")
+
+    def do_POST(self) -> None:  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path.startswith("/api/v1/files/"):
+            # PrusaLink start print endpoint: /api/v1/files/{storage}/{path}
+            rel = path[len("/api/v1/files/") :]
+            rel = unquote(rel)
+            if "/" not in rel:
+                self._send_text(400, "invalid file path")
+                return
+            STATE.start_print("/" + rel.lstrip("/"))
+            self.send_response(204)
+            self.end_headers()
+            return
+        self._send_text(404, "Not found")
 
 
 def main() -> None:
-    ip_addr = own_ip()
-    print(f"[SIM] start ip={ip_addr} mac={PRINTER_MAC or 'unknown'} orchestrator={ORCHESTRATOR_URL}", flush=True)
-
-    status = "IDLE"
-    progress = 0.0
-    job_id = None
-    started_at = 0.0
-    est_duration_s = 900
-
-    while True:
-        if status == "IDLE":
-            command = poll_command()
-            if command and command.get("type") == "START_PRINT":
-                status = "PRINTING"
-                progress = 0.0
-                job_id = str(command.get("job_id"))
-                est_duration_s = int(command.get("est_duration_s", 900))
-                started_at = time.time()
-        else:
-            elapsed = max(0.0, time.time() - started_at)
-            progress = min(100.0, round((elapsed / est_duration_s) * 100.0, 2))
-            if progress >= 100.0:
-                status = "IDLE"
-                job_id = None
-                progress = 0.0
-
-        ok = push_state(status, progress, job_id)
-        if not ok:
-            print("[SIM] state push failed", flush=True)
-        time.sleep(TICK_SECONDS)
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    print(f"[PRUSALINK-SIM] listening on {HOST}:{PORT} serial={PRINTER_SERIAL} model={PRINTER_MODEL}", flush=True)
+    server.serve_forever()
 
 
 if __name__ == "__main__":

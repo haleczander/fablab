@@ -6,6 +6,8 @@ from orchestrator.application.ports import (
 
 
 class FleetViewService:
+    SUPPORTED_ADAPTERS = {"prusalink"}
+
     def __init__(
         self,
         binding_repo: PrinterBindingRepositoryPort,
@@ -23,6 +25,8 @@ class FleetViewService:
             device = None
             if binding.printer_mac:
                 device = self.device_runtime_repo.get_by_mac(binding.printer_mac)
+            if not device and binding.printer_serial:
+                device = self.device_runtime_repo.get_by_serial(binding.printer_serial)
             if not device and binding.printer_ip:
                 device = self.device_runtime_repo.get_by_ip(binding.printer_ip)
             heartbeat = None
@@ -36,7 +40,9 @@ class FleetViewService:
                     "printer_id": binding.printer_id,
                     "printer_ip": binding.printer_ip,
                     "printer_mac": binding.printer_mac,
+                    "printer_serial": binding.printer_serial,
                     "printer_model": binding.printer_model,
+                    "adapter_name": binding.adapter_name or (device.detected_adapter if device else None),
                     "status": runtime.status if runtime else (device.status if device else None),
                     "last_heartbeat_at": heartbeat,
                 }
@@ -53,8 +59,30 @@ class FleetViewService:
                 {
                     "device_ip": device.device_ip,
                     "device_mac": device.device_mac,
+                    "device_serial": device.device_serial,
                     "status": device.status,
                     "detected_model": device.detected_model,
+                    "detected_adapter": device.detected_adapter,
+                    "last_heartbeat_at": device.last_heartbeat_at.isoformat() if device.last_heartbeat_at else None,
+                }
+            )
+        rows.sort(key=lambda r: r["device_ip"] or "")
+        return rows
+
+    def list_unmatched_contract_devices(self) -> list[dict[str, str | None]]:
+        rows: list[dict[str, str | None]] = []
+        for device in self.device_runtime_repo.list_all():
+            adapter = (device.detected_adapter or "").lower()
+            if adapter in self.SUPPORTED_ADAPTERS:
+                continue
+            rows.append(
+                {
+                    "device_ip": device.device_ip,
+                    "device_mac": device.device_mac,
+                    "device_serial": device.device_serial,
+                    "status": device.status,
+                    "detected_model": device.detected_model,
+                    "detected_adapter": device.detected_adapter,
                     "last_heartbeat_at": device.last_heartbeat_at.isoformat() if device.last_heartbeat_at else None,
                 }
             )
@@ -69,6 +97,7 @@ class FleetViewService:
                     "printer_id": row.get("printer_id"),
                     "printer_ip": row.get("printer_ip"),
                     "printer_mac": row.get("printer_mac"),
+                    "printer_serial": row.get("printer_serial"),
                     "printer_model": row.get("printer_model"),
                     "last_heartbeat_at": row.get("last_heartbeat_at"),
                     "machine_id": row.get("printer_id"),

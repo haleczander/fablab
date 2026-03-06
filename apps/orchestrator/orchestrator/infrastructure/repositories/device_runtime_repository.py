@@ -16,6 +16,9 @@ class SqlModelDeviceRuntimeRepository:
     def get_by_mac(self, device_mac: str) -> DeviceRuntime | None:
         return self.session.exec(select(DeviceRuntime).where(DeviceRuntime.device_mac == device_mac)).first()
 
+    def get_by_serial(self, device_serial: str) -> DeviceRuntime | None:
+        return self.session.exec(select(DeviceRuntime).where(DeviceRuntime.device_serial == device_serial)).first()
+
     def save(self, row: DeviceRuntime) -> DeviceRuntime:
         self.session.add(row)
         self.session.commit()

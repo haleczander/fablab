@@ -28,7 +28,9 @@ class MarkJobSentUseCase:
         binding = self.binding_repo.get_by_printer_id(printer_id)
         if binding:
             device = None
-            if binding.printer_mac:
+            if binding.printer_serial:
+                device = self.device_runtime_repo.get_by_serial(binding.printer_serial)
+            if not device and binding.printer_mac:
                 device = self.device_runtime_repo.get_by_mac(binding.printer_mac)
             if not device and binding.printer_ip:
                 device = self.device_runtime_repo.get_by_ip(binding.printer_ip)

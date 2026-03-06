@@ -4,21 +4,30 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from orchestrator.api.dependencies import (
     get_binding_by_printer_id_use_case,
+    get_create_printer_job_use_case,
     get_enqueue_start_command_use_case,
     get_list_fleet_use_case,
+    get_list_unmatched_contract_devices_use_case,
     get_list_unbound_ips_use_case,
     get_machine_states_payload_use_case,
     get_mark_job_sent_use_case,
+    get_printer_machine_info_use_case,
+    get_sync_printer_state_use_case,
 )
 from orchestrator.api.events import broadcast_events, broadcast_machines
 from orchestrator.application.use_cases import (
+    CreatePrinterJobUseCase,
     EnqueueStartPrintCommandUseCase,
     GetBindingByPrinterIdUseCase,
+    GetPrinterMachineInfoUseCase,
     ListFleetUseCase,
+    ListUnmatchedContractDevicesUseCase,
     ListUnboundIpsUseCase,
     MachineStatesPayloadUseCase,
     MarkJobSentUseCase,
+    SyncPrinterStateUseCase,
 )
+from orchestrator.domain.models import PrinterRuntime
 from orchestrator.domain.schemas import StartPrintCommandInput
 
 router = APIRouter(tags=["orchestrator"])
@@ -30,9 +39,13 @@ async def command_start_print(
     payload: StartPrintCommandInput,
     binding_by_printer_use_case: GetBindingByPrinterIdUseCase = Depends(get_binding_by_printer_id_use_case),
     enqueue_start_command_use_case: EnqueueStartPrintCommandUseCase = Depends(get_enqueue_start_command_use_case),
+    create_printer_job_use_case: CreatePrinterJobUseCase = Depends(get_create_printer_job_use_case),
     mark_job_sent_use_case: MarkJobSentUseCase = Depends(get_mark_job_sent_use_case),
     list_fleet_use_case: ListFleetUseCase = Depends(get_list_fleet_use_case),
     list_unbound_ips_use_case: ListUnboundIpsUseCase = Depends(get_list_unbound_ips_use_case),
+    list_unmatched_contract_devices_use_case: ListUnmatchedContractDevicesUseCase = Depends(
+        get_list_unmatched_contract_devices_use_case
+    ),
     machine_states_use_case: MachineStatesPayloadUseCase = Depends(get_machine_states_payload_use_case),
 ) -> dict[str, str | int]:
     binding = binding_by_printer_use_case.execute(printer_id)
@@ -41,7 +54,22 @@ async def command_start_print(
 
     job_id = payload.job_id or f"JOB-AUTO-{uuid4().hex[:10].upper()}"
     command = {"type": "START_PRINT", "job_id": job_id, "est_duration_s": payload.est_duration_s}
-    queued = enqueue_start_command_use_case.execute(printer_id, command)
+    queued = 0
+    if (binding.adapter_name or "").lower() == "prusalink":
+        if not payload.printer_file_path:
+            raise HTTPException(status_code=422, detail="printer_file_path requis pour adapter prusalink")
+        try:
+            remote = create_printer_job_use_case.execute(printer_id=printer_id, printer_file_path=payload.printer_file_path)
+        except (LookupError, ValueError) as err:
+            raise HTTPException(status_code=400, detail=str(err)) from err
+        except RuntimeError as err:
+            raise HTTPException(status_code=502, detail=str(err)) from err
+        command["remote_adapter"] = remote.get("adapter_name") or "prusalink"
+        if remote.get("external_job_id"):
+            command["external_job_id"] = str(remote["external_job_id"])
+    else:
+        queued = enqueue_start_command_use_case.execute(printer_id, command)
+
     runtime = mark_job_sent_use_case.execute(printer_id=printer_id, job_id=job_id)
 
     out: dict[str, str | int] = {"printer_id": printer_id, "queued": queued, **command}
@@ -52,8 +80,57 @@ async def command_start_print(
         {
             "fleet": list_fleet_use_case.execute(),
             "unbound_ips": list_unbound_ips_use_case.execute(),
+            "unmatched_contract_devices": list_unmatched_contract_devices_use_case.execute(),
         },
     )
     await broadcast_machines("machines_updated", machine_states_use_case.execute())
     return out
+
+
+@router.get("/printers/{printer_id}/machine-info")
+def get_machine_info(
+    printer_id: str,
+    machine_info_use_case: GetPrinterMachineInfoUseCase = Depends(get_printer_machine_info_use_case),
+) -> dict:
+    try:
+        return machine_info_use_case.execute(printer_id)
+    except LookupError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    except RuntimeError as err:
+        raise HTTPException(status_code=502, detail=str(err)) from err
+
+
+@router.post("/printers/{printer_id}/state/sync", response_model=PrinterRuntime)
+async def sync_machine_state(
+    printer_id: str,
+    sync_state_use_case: SyncPrinterStateUseCase = Depends(get_sync_printer_state_use_case),
+    list_fleet_use_case: ListFleetUseCase = Depends(get_list_fleet_use_case),
+    list_unbound_ips_use_case: ListUnboundIpsUseCase = Depends(get_list_unbound_ips_use_case),
+    list_unmatched_contract_devices_use_case: ListUnmatchedContractDevicesUseCase = Depends(
+        get_list_unmatched_contract_devices_use_case
+    ),
+    machine_states_use_case: MachineStatesPayloadUseCase = Depends(get_machine_states_payload_use_case),
+) -> PrinterRuntime:
+    try:
+        runtime = sync_state_use_case.execute(printer_id)
+    except LookupError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    except RuntimeError as err:
+        raise HTTPException(status_code=502, detail=str(err)) from err
+
+    await broadcast_events("runtime_updated", runtime.model_dump(mode="json"))
+    await broadcast_events(
+        "fleet_updated",
+        {
+            "fleet": list_fleet_use_case.execute(),
+            "unbound_ips": list_unbound_ips_use_case.execute(),
+            "unmatched_contract_devices": list_unmatched_contract_devices_use_case.execute(),
+        },
+    )
+    await broadcast_machines("machines_updated", machine_states_use_case.execute())
+    return runtime
 

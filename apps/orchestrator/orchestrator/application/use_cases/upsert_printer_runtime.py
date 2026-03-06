@@ -24,6 +24,7 @@ class UpsertPrinterRuntimeUseCase:
         data: PrinterStateInput,
         source_printer_ip: str | None = None,
         source_printer_mac: str | None = None,
+        source_printer_serial: str | None = None,
     ) -> PrinterRuntime:
         row = self.printer_runtime_repo.get_by_printer_id(printer_id)
         if not row:
@@ -34,6 +35,7 @@ class UpsertPrinterRuntimeUseCase:
             data=data,
             source_printer_ip=source_printer_ip,
             source_printer_mac=source_printer_mac,
+            source_printer_serial=source_printer_serial,
         )
         saved = self.printer_runtime_repo.save(row)
         self.backend_gateway.post_printer_state(printer_id, self.domain_service.to_backend_payload(saved))

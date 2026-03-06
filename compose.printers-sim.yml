@@ -7,9 +7,9 @@ services:
       dockerfile: Dockerfile
     container_name: sim-printer-prn01
     environment:
-      ORCHESTRATOR_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
-      TICK_SECONDS: ${SIM_TICK_SECONDS:-15}
-      PRINTER_MAC: "02:42:ac:19:00:11"
+      PRINTER_NAME: "PRN-01"
+      PRINTER_MODEL: "MK4"
+      PRINTER_SERIAL: "SIM-PRN01-SN"
     mac_address: "02:42:ac:19:00:11"
     networks:
       - imp3d_net
@@ -21,9 +21,9 @@ services:
       dockerfile: Dockerfile
     container_name: sim-printer-prn02
     environment:
-      ORCHESTRATOR_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
-      TICK_SECONDS: ${SIM_TICK_SECONDS:-15}
-      PRINTER_MAC: "02:42:ac:19:00:12"
+      PRINTER_NAME: "PRN-02"
+      PRINTER_MODEL: "MK4S"
+      PRINTER_SERIAL: "SIM-PRN02-SN"
     mac_address: "02:42:ac:19:00:12"
     networks:
       - imp3d_net
@@ -35,9 +35,9 @@ services:
       dockerfile: Dockerfile
     container_name: sim-printer-prn03
     environment:
-      ORCHESTRATOR_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
-      TICK_SECONDS: ${SIM_TICK_SECONDS:-15}
-      PRINTER_MAC: "02:42:ac:19:00:13"
+      PRINTER_NAME: "PRN-03"
+      PRINTER_MODEL: "MINI+"
+      PRINTER_SERIAL: "SIM-PRN03-SN"
     mac_address: "02:42:ac:19:00:13"
     networks:
       - imp3d_net

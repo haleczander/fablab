@@ -19,6 +19,9 @@ class SqlModelPrinterBindingRepository:
     def get_by_mac(self, printer_mac: str) -> PrinterBinding | None:
         return self.session.exec(select(PrinterBinding).where(PrinterBinding.printer_mac == printer_mac)).first()
 
+    def get_by_serial(self, printer_serial: str) -> PrinterBinding | None:
+        return self.session.exec(select(PrinterBinding).where(PrinterBinding.printer_serial == printer_serial)).first()
+
     def save(self, row: PrinterBinding) -> PrinterBinding:
         self.session.add(row)
         self.session.commit()
