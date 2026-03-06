@@ -1,13 +1,15 @@
+name: fablab-backend
+
 services:
   backend:
     build:
-      context: .
+      context: apps/backend
       dockerfile: Dockerfile
     container_name: fablab-backend
     env_file:
       - .env.orchestrateur
     environment:
-      APP_MODULE: app.backend_main:app
+      APP_MODULE: main:app
       APP_PORT: 8000
       BACKEND_DATABASE_URL: ${BACKEND_DATABASE_URL:-sqlite:////data/backend.db}
       ORCHESTRATOR_INTERNAL_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
@@ -22,8 +24,8 @@ services:
 
   backoffice:
     build:
-      context: .
-      dockerfile: web/backoffice/Dockerfile
+      context: apps/back-office
+      dockerfile: Dockerfile
     container_name: fablab-backoffice
     depends_on:
       - backend
@@ -37,8 +39,8 @@ services:
 
   frontoffice:
     build:
-      context: .
-      dockerfile: web/frontoffice/Dockerfile
+      context: apps/front-office
+      dockerfile: Dockerfile
     container_name: fablab-frontoffice
     depends_on:
       - backend

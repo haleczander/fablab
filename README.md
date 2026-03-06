@@ -1,6 +1,6 @@
 # Fablab Fleet Stack
 
-Projet compose de 3 services applicatifs:
+Projet compose de 4 applications:
 - `orchestrateur local` (edge, parle aux imprimantes)
 - `backend API` (source de verite metier)
 - `backoffice/frontoffice` (apps Nuxt separees)
@@ -13,7 +13,7 @@ Projet compose de 3 services applicatifs:
 - fronts = clients web, sans logique metier backend
 
 ## Endpoints backend
-Backend API (`app.backend_main:app`):
+Backend API (`apps/backend/main.py`):
 - `GET /health`
 - `GET /printers`
 - `POST /printers/register`
@@ -26,36 +26,39 @@ Backend API (`app.backend_main:app`):
 
 ## Stack front (debutant)
 - `Nuxt 3` choisi pour les 2 fronts (base Vue, prise en main simple).
-- Backoffice: `web/backoffice`
-- Frontoffice: `web/frontoffice`
+- Backoffice: `apps/back-office`
+- Frontoffice: `apps/front-office`
 
 ## Lancer en local
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt
 copy .env.orchestrateur.example .env.orchestrateur
 ```
 
 Orchestrateur:
 ```bash
-uvicorn app.main:app --reload --port 8001
+cd apps/orchestrator
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8001
 ```
 
 Backend API:
 ```bash
-uvicorn app.backend_main:app --reload --port 8000
+cd apps/backend
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
 ```
 
 Nuxt local (optionnel, hors Docker):
 ```bash
-cd web/backoffice
+cd apps/back-office
 npm install
 npm run dev
 ```
 
 ```bash
-cd web/frontoffice
+cd apps/front-office
 npm install
 npm run dev
 ```

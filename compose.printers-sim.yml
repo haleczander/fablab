@@ -1,36 +1,44 @@
+name: fablab-printers-sim
+
 services:
   printer-prn01:
     build:
-      context: .
-      dockerfile: Dockerfile.printer-sim
+      context: mock/printer-sim
+      dockerfile: Dockerfile
     container_name: sim-printer-prn01
     environment:
       ORCHESTRATOR_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
       TICK_SECONDS: ${SIM_TICK_SECONDS:-15}
+      PRINTER_MAC: "02:42:ac:19:00:11"
+    mac_address: "02:42:ac:19:00:11"
     networks:
       - imp3d_net
     restart: unless-stopped
 
   printer-prn02:
     build:
-      context: .
-      dockerfile: Dockerfile.printer-sim
+      context: mock/printer-sim
+      dockerfile: Dockerfile
     container_name: sim-printer-prn02
     environment:
       ORCHESTRATOR_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
       TICK_SECONDS: ${SIM_TICK_SECONDS:-15}
+      PRINTER_MAC: "02:42:ac:19:00:12"
+    mac_address: "02:42:ac:19:00:12"
     networks:
       - imp3d_net
     restart: unless-stopped
 
   printer-prn03:
     build:
-      context: .
-      dockerfile: Dockerfile.printer-sim
+      context: mock/printer-sim
+      dockerfile: Dockerfile
     container_name: sim-printer-prn03
     environment:
       ORCHESTRATOR_URL: ${ORCHESTRATOR_INTERNAL_URL:-http://orchestrateur:8001}
       TICK_SECONDS: ${SIM_TICK_SECONDS:-15}
+      PRINTER_MAC: "02:42:ac:19:00:13"
+    mac_address: "02:42:ac:19:00:13"
     networks:
       - imp3d_net
     restart: unless-stopped
