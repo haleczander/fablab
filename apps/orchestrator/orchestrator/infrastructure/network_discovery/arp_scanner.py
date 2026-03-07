@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import ipaddress
+import socket
 import subprocess
 import xml.etree.ElementTree as ET
-from typing import Any
+from concurrent.futures import ThreadPoolExecutor
 
-from orchestrator.domain.mac import normalize_mac
+from orchestrator.domain.models import MacAddress
 
 
 class ScapyArpNeighborScanner:
@@ -14,17 +15,17 @@ class ScapyArpNeighborScanner:
         if not target_network:
             return {}
 
-        nmap_table = self._scan_with_nmap(target_network, timeout_s)
-        if nmap_table is not None:
-            return nmap_table
-
-        return self._scan_with_scapy(target_network, timeout_s)
+        table = self._scan_with_nmap(target_network, timeout_s)
+        if not table:
+            self._prime_arp_cache(target_network, timeout_s)
+        table.update(self._read_arp_cache(target_network))
+        return table
 
     def _scan_with_nmap(
         self,
         target_network: ipaddress.IPv4Network | ipaddress.IPv6Network,
         timeout_s: float,
-    ) -> dict[str, str] | None:
+    ) -> dict[str, str]:
         cmd = ["nmap", "-sn", "-n", "-PR", str(target_network), "-oX", "-"]
         scan_timeout = max(5.0, min(60.0, timeout_s * 10.0))
         try:
@@ -36,15 +37,15 @@ class ScapyArpNeighborScanner:
                 check=False,
             )
         except (FileNotFoundError, PermissionError, OSError, subprocess.TimeoutExpired):
-            return None
+            return {}
 
         if completed.returncode != 0:
-            return None
+            return {}
 
         try:
             root = ET.fromstring(completed.stdout)
         except ET.ParseError:
-            return None
+            return {}
 
         table: dict[str, str] = {}
         for host in root.findall("host"):
@@ -62,54 +63,70 @@ class ScapyArpNeighborScanner:
                 if addr_type in {"ipv4", "ipv6"} and not ip:
                     ip = addr
                 if addr_type == "mac":
-                    mac = normalize_mac(addr)
-            if ip and mac:
-                table[ip] = mac
-        return table
-
-    def _scan_with_scapy(
-        self,
-        target_network: ipaddress.IPv4Network | ipaddress.IPv6Network,
-        timeout_s: float,
-    ) -> dict[str, str]:
-        try:
-            from scapy.all import ARP, Ether, conf, srp  # type: ignore
-        except Exception:
-            return {}
-
-        table: dict[str, str] = {}
-        bounded_timeout = max(0.3, min(timeout_s, 2.5))
-        iface = self._resolve_iface_for_network(conf, target_network)
-        try:
-            request = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=str(target_network))
-            answered, _ = srp(
-                request,
-                timeout=bounded_timeout,
-                retry=0,
-                verbose=False,
-                iface=iface,
-            )
-        except Exception:
-            return {}
-
-        for _, response in answered:
-            ip = str(getattr(response, "psrc", "")).strip()
-            mac = normalize_mac(getattr(response, "hwsrc", None))
+                    parsed = MacAddress.parse(addr)
+                    mac = str(parsed) if parsed else None
             if ip and mac:
                 table[ip] = mac
         return table
 
     @staticmethod
-    def _resolve_iface_for_network(conf: Any, network: ipaddress.IPv4Network | ipaddress.IPv6Network) -> str | None:
+    def _read_arp_cache(
+        target_network: ipaddress.IPv4Network | ipaddress.IPv6Network,
+    ) -> dict[str, str]:
+        if target_network.version != 4:
+            return {}
+
         try:
-            probe_ip = str(next(network.hosts())) if network.num_addresses > 2 else str(network.network_address)
-            route = conf.route.route(probe_ip)
-            iface = route[0] if isinstance(route, tuple) and route else None
-            if iface:
-                return str(iface)
-        except Exception:
-            return None
-        return None
+            with open("/proc/net/arp", encoding="utf-8") as fh:
+                lines = fh.read().splitlines()
+        except OSError:
+            return {}
+
+        table: dict[str, str] = {}
+        for line in lines[1:]:
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+
+            ip = (parts[0] or "").strip()
+            mac = MacAddress.parse(parts[3])
+            if not ip or not mac:
+                continue
+
+            try:
+                if ipaddress.ip_address(ip) in target_network:
+                    table[ip] = str(mac)
+            except ValueError:
+                continue
+        return table
+
+    @staticmethod
+    def _prime_arp_cache(
+        target_network: ipaddress.IPv4Network | ipaddress.IPv6Network,
+        timeout_s: float,
+    ) -> None:
+        if target_network.version != 4:
+            return
+
+        hosts = [str(host) for host in target_network.hosts()]
+        if not hosts:
+            return
+
+        connect_timeout = max(0.05, min(0.5, timeout_s))
+
+        def _touch_host(ip: str) -> None:
+            try:
+                with socket.create_connection((ip, 80), timeout=connect_timeout):
+                    return
+            except OSError:
+                return
+
+        with ThreadPoolExecutor(max_workers=min(64, len(hosts))) as pool:
+            for future in [pool.submit(_touch_host, ip) for ip in hosts]:
+                try:
+                    future.result()
+                except Exception:
+                    continue
 
     @staticmethod
     def _to_network(network: str, subnet_mask: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:

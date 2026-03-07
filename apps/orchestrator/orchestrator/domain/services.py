@@ -1,8 +1,15 @@
 from datetime import datetime, timezone
 
 from config import ORCH_HEARTBEAT_REFRESH_S
-from orchestrator.domain.models import DeviceRuntime, PrinterBinding, PrinterRuntime
-from orchestrator.domain.schemas import DeviceIngestInput, PrinterStateInput
+from orchestrator.application.dto import PrinterStateInput
+from orchestrator.domain.models import (
+    Device,
+    DeviceParams,
+    DeviceType,
+    IpAddress,
+    MacAddress,
+    PrinterBinding,
+)
 
 ALLOWED_STATUS = {"ON", "OFF", "IN_USE", "ERROR", "IDLE", "PRINTING"}
 
@@ -30,89 +37,59 @@ class OrchestratorDomainService:
         printer_id: str,
         printer_mac: str,
         printer_ip: str | None = None,
+        printer_model: str | None = None,
         is_ignored: bool = False,
     ) -> PrinterBinding:
         return PrinterBinding(
             printer_id=printer_id,
             printer_mac=printer_mac,
             printer_ip=printer_ip,
+            printer_model=printer_model,
             is_ignored=is_ignored,
         )
 
-    def new_printer_runtime(self, printer_id: str) -> PrinterRuntime:
-        row = PrinterRuntime(printer_id=printer_id)
-        row.last_heartbeat_at = now_utc()
-        return row
-
-    def new_device_runtime(
+    def device_params_from_snapshot(
         self,
-        device_ip: str,
-        device_mac: str | None = None,
-        device_serial: str | None = None,
-    ) -> DeviceRuntime:
-        row = DeviceRuntime(device_ip=device_ip, device_mac=device_mac, device_serial=device_serial)
-        row.last_heartbeat_at = now_utc()
-        return row
+        row: dict[str, str | bool | int | float | None],
+        *,
+        fallback_status: str = "OFF",
+    ) -> DeviceParams:
+        return DeviceParams(
+            status=self.normalize_status(str(row.get("status") or fallback_status)),
+            current_job_id=str(row.get("current_job_id") or "") or None,
+            progress_pct=float(row["progress_pct"]) if row.get("progress_pct") is not None else None,
+            nozzle_temp_c=float(row["nozzle_temp_c"]) if row.get("nozzle_temp_c") is not None else None,
+            bed_temp_c=float(row["bed_temp_c"]) if row.get("bed_temp_c") is not None else None,
+            last_heartbeat_at=str(row.get("last_heartbeat_at") or "") or None,
+        )
 
-    def apply_printer_state(
+    def device_from_snapshot(
         self,
-        row: PrinterRuntime,
-        data: PrinterStateInput,
-        source_printer_ip: str | None = None,
-        source_printer_mac: str | None = None,
-        source_printer_serial: str | None = None,
-    ) -> PrinterRuntime:
-        status = self.normalize_status(data.status)
-        if self.should_refresh_heartbeat(row.last_heartbeat_at, row.status != status):
-            row.last_heartbeat_at = now_utc()
+        row: dict[str, str | bool | int | float | None],
+        *,
+        binding: PrinterBinding | None = None,
+    ) -> Device:
+        params = self.device_params_from_snapshot(row)
+        device = Device(
+            mac=MacAddress.parse(str(row.get("device_mac") or "") or None),
+            ip=IpAddress.parse(str(row.get("device_ip") or "") or None),
+            business_id=binding.printer_id if binding else None,
+            ignored=binding.is_ignored if binding else bool(row.get("is_ignored")),
+            type=DeviceType.from_detected_adapter(str(row.get("detected_adapter") or "") or None),
+            params=params,
+            serial=str(row.get("device_serial") or "") or None,
+            model=(binding.printer_model if binding and binding.printer_model else (str(row.get("detected_model") or "") or None)),
+        )
+        return device
 
-        row.status = status
-        row.progress_pct = data.progress_pct
-        row.nozzle_temp_c = data.nozzle_temp_c
-        row.bed_temp_c = data.bed_temp_c
-        row.current_job_id = data.current_job_id
-        if source_printer_ip is not None:
-            row.last_printer_ip = source_printer_ip
-        if source_printer_mac is not None:
-            row.last_printer_mac = source_printer_mac
-        if source_printer_serial is not None:
-            row.last_printer_serial = source_printer_serial
-        return row
-
-    def apply_device_state(
-        self,
-        row: DeviceRuntime,
-        data: DeviceIngestInput,
-        source_ip: str,
-        source_mac: str | None = None,
-        source_serial: str | None = None,
-    ) -> DeviceRuntime:
-        status = self.normalize_status(data.status)
-        if self.should_refresh_heartbeat(row.last_heartbeat_at, row.status != status):
-            row.last_heartbeat_at = now_utc()
-
-        row.status = status
-        row.progress_pct = data.progress_pct
-        row.nozzle_temp_c = data.nozzle_temp_c
-        row.bed_temp_c = data.bed_temp_c
-        row.current_job_id = data.current_job_id
-        row.last_printer_ip = source_ip
-        if source_mac is not None:
-            row.device_mac = source_mac
-            row.last_printer_mac = source_mac
-        if source_serial is not None:
-            row.device_serial = source_serial
-            row.last_printer_serial = source_serial
-        return row
-
-    def to_backend_payload(self, row: PrinterRuntime) -> dict:
-        return {
-            "status": row.status,
-            "last_heartbeat_at": row.last_heartbeat_at.isoformat(),
-            "progress_pct": row.progress_pct,
-            "nozzle_temp_c": row.nozzle_temp_c,
-            "bed_temp_c": row.bed_temp_c,
-            "current_job_id": row.current_job_id,
-            "last_printer_serial": row.last_printer_serial,
-        }
+    def device_from_binding(self, binding: PrinterBinding) -> Device:
+        return Device(
+            mac=MacAddress.parse(binding.printer_mac),
+            ip=IpAddress.parse(binding.printer_ip),
+            business_id=binding.printer_id,
+            ignored=binding.is_ignored,
+            type=DeviceType.UNKNOWN,
+            params=DeviceParams(status="OFF"),
+            model=binding.printer_model,
+        )
 

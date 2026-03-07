@@ -9,23 +9,33 @@ class ListDeviceBindingRowsUseCase:
         binding_repo: PrinterBindingRepositoryPort,
         discovery_snapshot_provider: Callable[[], list[dict[str, str | bool | int | float | None]]] | None = None,
     ) -> None:
-        self.binding_repo = binding_repo
-        self.discovery_snapshot_provider = discovery_snapshot_provider
+        self._binding_repo = binding_repo
+        self._discovery_snapshot_provider = discovery_snapshot_provider
+
+    @staticmethod
+    def _row_key(row: dict[str, str | bool | int | float | None]) -> str:
+        return (
+            str(row.get("device_mac") or "").strip()
+            or str(row.get("device_serial") or "").strip()
+            or str(row.get("device_ip") or "").strip()
+        )
 
     def execute(self, include_ignored: bool = False) -> list[dict[str, str | bool | int | None]]:
         rows: list[dict[str, str | bool | int | None]] = []
-        binding_by_mac = {binding.printer_mac: binding for binding in self.binding_repo.list_all() if binding.printer_mac}
+        bindings = self._binding_repo.list_all()
+        binding_by_mac = {binding.printer_mac: binding for binding in bindings if binding.printer_mac}
 
         emitted_keys: set[str] = set()
-        if self.discovery_snapshot_provider:
-            for item in self.discovery_snapshot_provider():
-                ip = str(item.get("device_ip") or "").strip()
-                mac = str(item.get("device_mac") or "").strip()
-                serial = str(item.get("device_serial") or "").strip()
-                key = mac or serial or ip
+        if self._discovery_snapshot_provider:
+            for item in self._discovery_snapshot_provider():
+                key = self._row_key(item)
                 if not key or key in emitted_keys:
                     continue
                 emitted_keys.add(key)
+
+                ip = str(item.get("device_ip") or "").strip()
+                mac = str(item.get("device_mac") or "").strip()
+                serial = str(item.get("device_serial") or "").strip()
                 binding = binding_by_mac.get(mac) if mac else None
                 if binding and binding.is_ignored and not include_ignored:
                     continue
@@ -47,10 +57,10 @@ class ListDeviceBindingRowsUseCase:
                         "is_bound": bool(binding and binding.printer_id),
                         "is_ignored": bool(binding.is_ignored) if binding else False,
                         "printer_id": binding.printer_id if binding else None,
-                        "printer_model": None,
+                        "printer_model": binding.printer_model if binding else None,
                     }
                 )
-        for binding in self.binding_repo.list_all():
+        for binding in bindings:
             if not binding.printer_id:
                 continue
             key = binding.printer_mac or binding.printer_id
@@ -73,7 +83,7 @@ class ListDeviceBindingRowsUseCase:
                     "is_bound": True,
                     "is_ignored": binding.is_ignored,
                     "printer_id": binding.printer_id,
-                    "printer_model": None,
+                    "printer_model": binding.printer_model,
                 }
             )
         rows.sort(key=lambda item: (not bool(item["is_bound"]), str(item["device_ip"] or "")))

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, model_validator
-from orchestrator.domain.mac import normalize_mac
+
+from orchestrator.domain.models import MacAddress
 
 PRINTER_ID_PATTERN = r"^PRN-[A-Za-z0-9_-]+$"
 
@@ -14,7 +15,6 @@ class BindPrinterInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_binding_target(self) -> "BindPrinterInput":
-        if normalize_mac(self.printer_mac) is None:
+        if MacAddress.parse(self.printer_mac) is None:
             raise ValueError("printer_mac invalide")
         return self
-

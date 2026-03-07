@@ -6,7 +6,7 @@ from sqlalchemy.engine import make_url
 from sqlmodel import Session, SQLModel, create_engine
 
 from config import ORCH_DATABASE_URL
-from orchestrator.domain import models as _models  # noqa: F401
+from orchestrator.infrastructure.persistence import models as _models  # noqa: F401
 
 engine = create_engine(ORCH_DATABASE_URL, echo=False, pool_pre_ping=True)
 
@@ -29,7 +29,7 @@ def _needs_binding_schema_reset() -> bool:
             return False
         cols = conn.execute(text("PRAGMA table_info('printer_bindings')")).fetchall()
         col_names = {str(col[1]) for col in cols}
-        required = {"printer_id", "printer_mac", "printer_ip", "is_ignored"}
+        required = {"printer_id", "printer_mac", "printer_ip", "printer_model", "is_ignored"}
         return not required.issubset(col_names)
 
 

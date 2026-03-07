@@ -1,6 +1,5 @@
 from orchestrator.application.ports import PrinterBindingRepositoryPort
-from orchestrator.domain.mac import normalize_mac
-from orchestrator.domain.models import PrinterBinding
+from orchestrator.domain.models import MacAddress, PrinterBinding
 
 
 class SetDeviceIgnoredByMacUseCase:
@@ -16,16 +15,23 @@ class SetDeviceIgnoredByMacUseCase:
         detected_adapter: str | None = None,
         detected_model: str | None = None,
     ) -> PrinterBinding:
-        mac = normalize_mac(device_mac)
+        _ = device_serial, detected_adapter
+        mac = MacAddress.parse(device_mac)
         if not mac:
             raise ValueError("invalid device_mac")
 
-        row = self._binding_repo.get_by_mac(mac)
+        row = self._binding_repo.get_by_mac(str(mac))
         if not row:
             if not is_ignored:
                 raise LookupError("device not found")
-            row = PrinterBinding(printer_mac=mac, printer_ip=device_ip or None, is_ignored=True)
+            row = PrinterBinding(
+                printer_mac=str(mac),
+                printer_ip=device_ip or None,
+                printer_model=detected_model or None,
+                is_ignored=True,
+            )
 
         row.is_ignored = is_ignored
         row.printer_ip = device_ip or row.printer_ip
+        row.printer_model = detected_model or row.printer_model
         return self._binding_repo.save(row)
