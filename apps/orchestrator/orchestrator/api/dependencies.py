@@ -14,14 +14,12 @@ from orchestrator.application.use_cases import (
     CreatePrinterJobUseCase,
     EnqueueStartPrintCommandUseCase,
     GetBindingByPrinterIdUseCase,
-    ListDeviceRuntimesUseCase,
-    ListDeviceBindingRowsUseCase,
+    ListBindingsUseCase,
+    ListExternalDevicesUseCase,
     ListFleetUseCase,
     ListUnboundIpsUseCase,
     MachineStatesPayloadUseCase,
     RefreshNetworkDiscoveryUseCase,
-    SetDeviceIgnoredByMacUseCase,
-    SetDeviceIgnoredUseCase,
     UnbindPrinterUseCase,
     UpsertBindingUseCase,
 )
@@ -89,15 +87,10 @@ def get_fleet_view_service(
     )
 
 
-def get_list_device_runtimes_use_case(
-) -> ListDeviceRuntimesUseCase:
-    return ListDeviceRuntimesUseCase(_discovery_snapshot.list_rows)
-
-
-def get_list_device_binding_rows_use_case(
+def get_list_bindings_use_case(
     binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
-) -> ListDeviceBindingRowsUseCase:
-    return ListDeviceBindingRowsUseCase(
+) -> ListBindingsUseCase:
+    return ListBindingsUseCase(
         binding_repo=binding_repo,
         discovery_snapshot_provider=_discovery_snapshot.list_rows,
     )
@@ -107,6 +100,12 @@ def get_list_fleet_use_case(
     fleet_view: FleetViewService = Depends(get_fleet_view_service),
 ) -> ListFleetUseCase:
     return ListFleetUseCase(fleet_view)
+
+
+def get_list_external_devices_use_case(
+    fleet_view: FleetViewService = Depends(get_fleet_view_service),
+) -> ListExternalDevicesUseCase:
+    return ListExternalDevicesUseCase(fleet_view)
 
 
 def get_list_unbound_ips_use_case(
@@ -131,17 +130,13 @@ def get_notification_port() -> NotificationPort:
 
 def get_orchestrator_notification_service(
     notification_port: NotificationPort = Depends(get_notification_port),
-    list_fleet_use_case: ListFleetUseCase = Depends(get_list_fleet_use_case),
-    list_unbound_ips_use_case: ListUnboundIpsUseCase = Depends(get_list_unbound_ips_use_case),
-    list_device_binding_rows_use_case: ListDeviceBindingRowsUseCase = Depends(get_list_device_binding_rows_use_case),
-    machine_states_use_case: MachineStatesPayloadUseCase = Depends(get_machine_states_payload_use_case),
+    list_bindings_use_case: ListBindingsUseCase = Depends(get_list_bindings_use_case),
+    list_external_devices_use_case: ListExternalDevicesUseCase = Depends(get_list_external_devices_use_case),
 ) -> OrchestratorNotificationService:
     return OrchestratorNotificationService(
         notification_port=notification_port,
-        list_fleet_use_case=list_fleet_use_case,
-        list_unbound_ips_use_case=list_unbound_ips_use_case,
-        list_device_binding_rows_use_case=list_device_binding_rows_use_case,
-        machine_states_use_case=machine_states_use_case,
+        list_bindings_use_case=list_bindings_use_case,
+        list_external_devices_use_case=list_external_devices_use_case,
     )
 
 
@@ -175,18 +170,6 @@ def get_create_printer_job_use_case(
         adapter_resolver=adapter_registry,
         discovery_snapshot_provider=_discovery_snapshot.list_rows,
     )
-
-
-def get_set_device_ignored_use_case(
-    binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
-) -> SetDeviceIgnoredUseCase:
-    return SetDeviceIgnoredUseCase(binding_repo=binding_repo)
-
-
-def get_set_device_ignored_by_mac_use_case(
-    binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
-) -> SetDeviceIgnoredByMacUseCase:
-    return SetDeviceIgnoredByMacUseCase(binding_repo=binding_repo)
 
 
 def get_unbind_printer_use_case(
@@ -227,16 +210,16 @@ def get(interface: type[T], session: Session | None = None) -> T:
                 discovery_snapshot_provider=_discovery_snapshot.list_rows,
             ),
         )
-    if interface is ListDeviceRuntimesUseCase:
-        return cast(T, ListDeviceRuntimesUseCase(_discovery_snapshot.list_rows))
-    if interface is ListDeviceBindingRowsUseCase:
+    if interface is ListBindingsUseCase:
         return cast(
             T,
-            ListDeviceBindingRowsUseCase(
+            ListBindingsUseCase(
                 binding_repo=get(PrinterBindingRepositoryPort, session=session),
                 discovery_snapshot_provider=_discovery_snapshot.list_rows,
             ),
         )
+    if interface is ListExternalDevicesUseCase:
+        return cast(T, ListExternalDevicesUseCase(get(FleetViewService, session=session)))
     if interface is ListFleetUseCase:
         return cast(T, ListFleetUseCase(get(FleetViewService, session=session)))
     if interface is ListUnboundIpsUseCase:
@@ -266,10 +249,6 @@ def get(interface: type[T], session: Session | None = None) -> T:
                 discovery_snapshot_provider=_discovery_snapshot.list_rows,
             ),
         )
-    if interface is SetDeviceIgnoredUseCase:
-        return cast(T, SetDeviceIgnoredUseCase(get(PrinterBindingRepositoryPort, session=session)))
-    if interface is SetDeviceIgnoredByMacUseCase:
-        return cast(T, SetDeviceIgnoredByMacUseCase(get(PrinterBindingRepositoryPort, session=session)))
     if interface is UnbindPrinterUseCase:
         return cast(
             T,

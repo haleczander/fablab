@@ -7,5 +7,6 @@ class PrinterBinding(BaseModel):
     printer_mac: str
     printer_ip: str | None = None
     printer_model: str | None = None
+    bound_at: str | None = None
     is_ignored: bool = False
 

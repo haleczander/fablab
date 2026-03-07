@@ -51,15 +51,12 @@ class DiscoverySnapshotPort(Protocol):
 
 
 class NotificationPort(Protocol):
-    async def notify_event(self, event: str, payload: dict | list | None = None) -> None: ...
-    async def notify_devices(
+    async def notify_device_rows(
         self,
-        event: str,
-        payload: list[dict[str, str | bool | int | None]],
+        rows: list[dict[str, str | bool | int | float | None]],
     ) -> None: ...
-    async def notify_machines(
+    async def notify_external_rows(
         self,
-        event: str,
-        payload: list[dict[str, str | None]],
+        rows: list[dict[str, str | None]],
     ) -> None: ...
 

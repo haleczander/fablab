@@ -8,9 +8,9 @@ class UnbindPrinterUseCase:
     ) -> None:
         self._binding_repo = binding_repo
 
-    def execute(self, printer_id: str) -> None:
-        row = self._binding_repo.get_by_printer_id(printer_id)
+    def execute(self, printer_mac: str) -> None:
+        row = self._binding_repo.get_by_mac(printer_mac)
         if not row:
-            raise LookupError(f"binding introuvable pour {printer_id}")
+            raise LookupError(f"binding introuvable pour {printer_mac}")
 
         self._binding_repo.delete(row)

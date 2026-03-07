@@ -5,6 +5,30 @@ main { max-width: 1180px; margin: 20px auto; padding: 0 12px; }
 input, button { padding: 8px; border-radius: 8px; }
 input { width: 100%; min-width: 120px; }
 button { border: 0; background: #0b7a75; color: #fff; }
+.compact-input { min-width: 72px; max-width: 94px; }
+.compact-col { width: 92px; }
+.status-col { width: 210px; }
+.action-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+.action-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.action-btn.secondary { background: #64748b; }
+.action-btn.danger { background: #b91c1c; }
+.action-btn:disabled { opacity: .55; cursor: not-allowed; }
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; }
 .section-head h3 { margin: 0; }
 .section-actions { display: flex; align-items: center; gap: 8px; }
@@ -85,14 +109,15 @@ th, td { padding: 8px 6px; border-bottom: 1px solid #e5e7eb; text-align: left; f
 th + th, td + td { padding-left: 14px; }
 .muted { color: #6b7280; font-size: 12px; }
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.table-wrap table { min-width: 740px; }
-.status-cell { display: flex; align-items: center; justify-content: center; width: 100%; }
+.table-wrap table { min-width: 680px; }
+.status-cell { display: flex; align-items: center; gap: 8px; width: 100%; }
+.status-inline { color: #475569; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
 .status-green { background: #16a34a; }
 .status-orange { background: #f59e0b; }
 .status-red { background: #dc2626; }
-.dot-col { width: 36px; text-align: center; }
-th.dot-col, td.dot-col { text-align: center; padding-left: 4px; padding-right: 4px; }
+.dot-col { text-align: left; }
+th.dot-col, td.dot-col { padding-left: 4px; padding-right: 4px; }
 .info-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; }
 .info-icon {
   display: inline-flex;
@@ -111,9 +136,9 @@ th.dot-col, td.dot-col { text-align: center; padding-left: 4px; padding-right: 4
 }
 .tooltip {
   position: absolute;
-  left: 50%;
+  left: 0;
   bottom: calc(100% + 8px);
-  transform: translateX(-50%);
+  transform: none;
   min-width: 210px;
   max-width: min(280px, 78vw);
   padding: 6px 8px;

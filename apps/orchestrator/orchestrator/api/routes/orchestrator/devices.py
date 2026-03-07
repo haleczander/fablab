@@ -1,60 +1,50 @@
-from fastapi import APIRouter, Depends, HTTPException
+import asyncio
+import json
 
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+
+from config import ORCH_DISCOVERY_CIDRS, ORCH_DISCOVERY_TIMEOUT_S
 from orchestrator.api import dependencies
-from orchestrator.api.schemas import DeviceIgnoreByMacInput, DeviceIgnoreInput
 from orchestrator.application.app_services import OrchestratorNotificationService
-from orchestrator.application.use_cases import (
-    ListDeviceRuntimesUseCase,
-    SetDeviceIgnoredByMacUseCase,
-    SetDeviceIgnoredUseCase,
-)
-from orchestrator.domain.models import PrinterBinding
+from orchestrator.application.use_cases import ListBindingsUseCase, RefreshNetworkDiscoveryUseCase
+from orchestrator.domain.models import NetworkRange
+from orchestrator.infrastructure.notifications import WebSocketNotificationAdapter
 
 router = APIRouter(prefix="/devices", tags=["orchestrator"])
 
 
-@router.get("")
-def list_devices(
-    list_device_runtimes_use_case: ListDeviceRuntimesUseCase = Depends(dependencies.dep(ListDeviceRuntimesUseCase)),
-) -> list[dict[str, str | bool | float | None]]:
-    return list_device_runtimes_use_case.execute()
-
-
-@router.patch("/{device_id}/ignored", response_model=PrinterBinding)
-async def set_device_ignored(
-    device_id: int,
-    payload: DeviceIgnoreInput,
-    set_device_ignored_use_case: SetDeviceIgnoredUseCase = Depends(dependencies.dep(SetDeviceIgnoredUseCase)),
-    notifications: OrchestratorNotificationService = Depends(dependencies.get_orchestrator_notification_service),
-) -> PrinterBinding:
-    try:
-        updated = set_device_ignored_use_case.execute(device_id=device_id, is_ignored=payload.is_ignored)
-    except LookupError as err:
-        raise HTTPException(status_code=404, detail=str(err)) from err
-    await notifications.notify_devices_changed()
-    return updated
-
-
-@router.post("/ignored/by-mac", response_model=PrinterBinding)
-async def set_device_ignored_by_mac(
-    payload: DeviceIgnoreByMacInput,
-    set_device_ignored_by_mac_use_case: SetDeviceIgnoredByMacUseCase = Depends(
-        dependencies.dep(SetDeviceIgnoredByMacUseCase)
+@router.post("/discover")
+async def discover_devices(
+    refresh_network_discovery_use_case: RefreshNetworkDiscoveryUseCase = Depends(
+        dependencies.dep(RefreshNetworkDiscoveryUseCase)
     ),
     notifications: OrchestratorNotificationService = Depends(dependencies.get_orchestrator_notification_service),
-) -> PrinterBinding:
+) -> dict[str, int]:
+    cidr = NetworkRange.parse(ORCH_DISCOVERY_CIDRS).cidr
+    updated = await asyncio.to_thread(
+        refresh_network_discovery_use_case.execute,
+        cidr,
+        ORCH_DISCOVERY_TIMEOUT_S,
+    )
+    await notifications.notify_discovery_refreshed()
+    return {"updated": int(updated)}
+
+
+@router.websocket("/ws")
+async def ws_devices(
+    websocket: WebSocket,
+    list_bindings_use_case: ListBindingsUseCase = Depends(dependencies.get_list_bindings_use_case),
+    notification_adapter: WebSocketNotificationAdapter = Depends(dependencies.get_notification_adapter),
+) -> None:
+    await websocket.accept()
+    notification_adapter.add_device_client(websocket)
     try:
-        updated = set_device_ignored_by_mac_use_case.execute(
-            device_mac=payload.device_mac,
-            device_ip=str(payload.device_ip).strip(),
-            is_ignored=payload.is_ignored,
-            device_serial=(payload.device_serial or "").strip() or None,
-            detected_adapter=(payload.detected_adapter or "").strip() or None,
-            detected_model=(payload.detected_model or "").strip() or None,
-        )
-    except ValueError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
-    except LookupError as err:
-        raise HTTPException(status_code=404, detail=str(err)) from err
-    await notifications.notify_devices_changed()
-    return updated
+        rows = list_bindings_use_case.execute(include_ignored=True)
+        await websocket.send_text(json.dumps({"event": "devices_snapshot", "payload": rows}))
+        while True:
+            if await websocket.receive_text() == "ping":
+                await websocket.send_text(json.dumps({"event": "pong", "payload": None}))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        notification_adapter.remove_device_client(websocket)

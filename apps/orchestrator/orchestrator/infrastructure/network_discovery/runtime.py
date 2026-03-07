@@ -9,6 +9,7 @@ from urllib.request import Request, urlopen
 from sqlmodel import Session, select
 
 from orchestrator.application.app_services import FleetViewService
+from orchestrator.application.use_cases import ListBindingsUseCase, ListExternalDevicesUseCase
 from orchestrator.domain.models import Device, DeviceParams, DeviceType, IpAddress, MacAddress, Network, NetworkRange
 from orchestrator.domain.models import PrinterBinding
 from orchestrator.infrastructure.network_discovery.arp_scanner import ScapyArpNeighborScanner
@@ -207,7 +208,13 @@ async def discovery_loop(
                         binding_repo=SqlModelPrinterBindingRepository(session),
                         discovery_snapshot_provider=list_snapshot_rows,
                     )
-                    await notification_adapter.notify_machines("machines_updated", fleet.machine_states_payload())
+                    rows = ListBindingsUseCase(
+                        binding_repo=SqlModelPrinterBindingRepository(session),
+                        discovery_snapshot_provider=list_snapshot_rows,
+                    ).execute(include_ignored=True)
+                    external_rows = ListExternalDevicesUseCase(fleet).execute()
+                    await notification_adapter.notify_device_rows(rows)
+                    await notification_adapter.notify_external_rows(external_rows)
         except Exception:
             pass
         try:
@@ -230,7 +237,13 @@ async def bound_refresh_loop(
                         binding_repo=SqlModelPrinterBindingRepository(session),
                         discovery_snapshot_provider=list_snapshot_rows,
                     )
-                    await notification_adapter.notify_machines("machines_updated", fleet.machine_states_payload())
+                    rows = ListBindingsUseCase(
+                        binding_repo=SqlModelPrinterBindingRepository(session),
+                        discovery_snapshot_provider=list_snapshot_rows,
+                    ).execute(include_ignored=True)
+                    external_rows = ListExternalDevicesUseCase(fleet).execute()
+                    await notification_adapter.notify_device_rows(rows)
+                    await notification_adapter.notify_external_rows(external_rows)
         except Exception:
             pass
         try:

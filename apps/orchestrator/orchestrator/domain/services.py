@@ -45,6 +45,7 @@ class OrchestratorDomainService:
             printer_mac=printer_mac,
             printer_ip=printer_ip,
             printer_model=printer_model,
+            bound_at=now_utc().isoformat(),
             is_ignored=is_ignored,
         )
 

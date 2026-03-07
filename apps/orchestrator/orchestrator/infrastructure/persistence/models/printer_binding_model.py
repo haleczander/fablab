@@ -13,6 +13,7 @@ class SqlPrinterBinding(SQLModel, table=True):
     printer_mac: str = Field(index=True, unique=True)
     printer_ip: Optional[str] = Field(default=None, index=True)
     printer_model: Optional[str] = Field(default=None)
+    bound_at: Optional[str] = Field(default=None, index=True)
     is_ignored: bool = Field(default=False, index=True)
 
     def to_domain(self) -> PrinterBinding:
@@ -22,6 +23,7 @@ class SqlPrinterBinding(SQLModel, table=True):
             printer_mac=self.printer_mac,
             printer_ip=self.printer_ip,
             printer_model=self.printer_model,
+            bound_at=self.bound_at,
             is_ignored=self.is_ignored,
         )
 
@@ -33,6 +35,7 @@ class SqlPrinterBinding(SQLModel, table=True):
             printer_mac=binding.printer_mac,
             printer_ip=binding.printer_ip,
             printer_model=binding.printer_model,
+            bound_at=binding.bound_at,
             is_ignored=binding.is_ignored,
         )
 
@@ -41,4 +44,5 @@ class SqlPrinterBinding(SQLModel, table=True):
         self.printer_mac = binding.printer_mac
         self.printer_ip = binding.printer_ip
         self.printer_model = binding.printer_model
+        self.bound_at = binding.bound_at
         self.is_ignored = binding.is_ignored
