@@ -1,20 +1,18 @@
 from orchestrator.application.ports import (
     BackendGatewayPort,
-    PrinterRuntimeRepositoryPort,
 )
 from orchestrator.domain.models import PrinterRuntime
 from orchestrator.domain.schemas import PrinterStateInput
 from orchestrator.domain.services import OrchestratorDomainService
+from orchestrator.infrastructure.state.live_machine_state import upsert_machine_state
 
 
 class UpsertPrinterRuntimeUseCase:
     def __init__(
         self,
-        printer_runtime_repo: PrinterRuntimeRepositoryPort,
         backend_gateway: BackendGatewayPort,
         domain_service: OrchestratorDomainService | None = None,
     ) -> None:
-        self.printer_runtime_repo = printer_runtime_repo
         self.backend_gateway = backend_gateway
         self.domain_service = domain_service or OrchestratorDomainService()
 
@@ -26,10 +24,7 @@ class UpsertPrinterRuntimeUseCase:
         source_printer_mac: str | None = None,
         source_printer_serial: str | None = None,
     ) -> PrinterRuntime:
-        row = self.printer_runtime_repo.get_by_printer_id(printer_id)
-        if not row:
-            row = self.domain_service.new_printer_runtime(printer_id)
-
+        row = self.domain_service.new_printer_runtime(printer_id)
         self.domain_service.apply_printer_state(
             row=row,
             data=data,
@@ -37,7 +32,18 @@ class UpsertPrinterRuntimeUseCase:
             source_printer_mac=source_printer_mac,
             source_printer_serial=source_printer_serial,
         )
-        saved = self.printer_runtime_repo.save(row)
-        self.backend_gateway.post_printer_state(printer_id, self.domain_service.to_backend_payload(saved))
-        return saved
+        upsert_machine_state(
+            printer_id,
+            {
+                "printer_id": printer_id,
+                "status": row.status,
+                "current_job_id": row.current_job_id,
+                "progress_pct": row.progress_pct,
+                "nozzle_temp_c": row.nozzle_temp_c,
+                "bed_temp_c": row.bed_temp_c,
+                "last_heartbeat_at": row.last_heartbeat_at.isoformat(),
+            },
+        )
+        self.backend_gateway.post_printer_state(printer_id, self.domain_service.to_backend_payload(row))
+        return row
 

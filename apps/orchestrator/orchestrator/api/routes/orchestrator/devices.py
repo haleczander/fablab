@@ -18,7 +18,7 @@ from orchestrator.application.use_cases import (
     SetDeviceIgnoredUseCase,
 )
 from orchestrator.domain.mac import normalize_mac
-from orchestrator.domain.models import DeviceRuntime
+from orchestrator.domain.models import DeviceRuntime, PrinterBinding
 from orchestrator.domain.schemas import DeviceIgnoreByMacInput, DeviceIgnoreInput, DeviceIngestInput
 
 router = APIRouter(prefix="/devices", tags=["orchestrator"])
@@ -63,13 +63,13 @@ async def ingest_device_state(
     return device
 
 
-@router.patch("/{device_id}/ignored", response_model=DeviceRuntime)
+@router.patch("/{device_id}/ignored", response_model=PrinterBinding)
 async def set_device_ignored(
     device_id: int,
     payload: DeviceIgnoreInput,
     set_device_ignored_use_case: SetDeviceIgnoredUseCase = Depends(dependencies.dep(SetDeviceIgnoredUseCase)),
     list_device_binding_rows_use_case: ListDeviceBindingRowsUseCase = Depends(dependencies.dep(ListDeviceBindingRowsUseCase)),
-) -> DeviceRuntime:
+) -> PrinterBinding:
     try:
         updated = set_device_ignored_use_case.execute(device_id=device_id, is_ignored=payload.is_ignored)
     except LookupError as err:
@@ -78,14 +78,14 @@ async def set_device_ignored(
     return updated
 
 
-@router.post("/ignored/by-mac", response_model=DeviceRuntime)
+@router.post("/ignored/by-mac", response_model=PrinterBinding)
 async def set_device_ignored_by_mac(
     payload: DeviceIgnoreByMacInput,
     set_device_ignored_by_mac_use_case: SetDeviceIgnoredByMacUseCase = Depends(
         dependencies.dep(SetDeviceIgnoredByMacUseCase)
     ),
     list_device_binding_rows_use_case: ListDeviceBindingRowsUseCase = Depends(dependencies.dep(ListDeviceBindingRowsUseCase)),
-) -> DeviceRuntime:
+) -> PrinterBinding:
     try:
         updated = set_device_ignored_by_mac_use_case.execute(
             device_mac=payload.device_mac,

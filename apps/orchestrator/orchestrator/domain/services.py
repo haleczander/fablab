@@ -28,19 +28,15 @@ class OrchestratorDomainService:
     def new_binding(
         self,
         printer_id: str,
-        printer_ip: str | None,
-        printer_mac: str | None,
-        printer_serial: str | None,
-        printer_model: str | None,
-        adapter_name: str | None,
+        printer_mac: str,
+        printer_ip: str | None = None,
+        is_ignored: bool = False,
     ) -> PrinterBinding:
         return PrinterBinding(
             printer_id=printer_id,
-            printer_ip=printer_ip,
             printer_mac=printer_mac,
-            printer_serial=printer_serial,
-            printer_model=printer_model,
-            adapter_name=adapter_name,
+            printer_ip=printer_ip,
+            is_ignored=is_ignored,
         )
 
     def new_printer_runtime(self, printer_id: str) -> PrinterRuntime:

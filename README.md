@@ -54,6 +54,15 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
+Inspection / migrations backend:
+```bash
+cd apps/backend
+python manage.py current
+python manage.py schema
+python manage.py migrate
+alembic revision --autogenerate -m "add_new_table"
+```
+
 Nuxt local (optionnel, hors Docker):
 ```bash
 cd apps/back-office
@@ -91,7 +100,16 @@ Cette stack lance:
 - Le bloc `machines_feed` ouvre ensuite `ws://<backend>/ws/machines` pour l'etat des machines.
 
 ## Notes backend
-- Le backend applique ses migrations au demarrage via la table `schema_migrations`.
+- Le backend applique ses migrations Alembic au demarrage.
+- Revision courante: `cd apps/backend && python manage.py current`
+- Schema reel de la base: `cd apps/backend && python manage.py schema`
+- Les migrations versionnees sont dans `apps/backend/alembic/versions`.
+- Pour ajouter une migration: `cd apps/backend && alembic revision --autogenerate -m "message"`
+
+## Notes orchestrateur
+- La persistance locale de l'orchestrateur est volontairement minimale: `printer_bindings` ne garde que `printer_id`, `printer_mac`, `printer_ip` et `is_ignored`.
+- La MAC est la cle de fiabilite; l'IP est un cache de routage mis a jour par la discovery reseau.
+- Les etats machine, modeles, serials, adapters et telemetries sont lus a la volee depuis la discovery et l'etat live en memoire.
 
 Simulation imprimantes 3D (compose separe):
 ```bash

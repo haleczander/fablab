@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from backend.domain.models import BackendCmsSite
-from backend.domain.schemas.cms import CmsBlock, CmsDraft, CmsPublishedSite, CmsSection, CmsSiteBundle
+from backend.domain.schemas.cms import CmsDraft, CmsPublishedSite, CmsSection, CmsSiteBundle
 from backend.infrastructure.db import get_session
 
 router = APIRouter(tags=["backend-api"])
@@ -17,75 +17,15 @@ def _default_draft() -> CmsDraft:
     return CmsDraft(
         sections=[
             CmsSection(
-                id="presentation-fablab",
-                title="Presentation du FabLab",
-                slug="presentation-fablab",
+                id="section-root",
+                title=" ",
+                slug="section-root",
                 layout="vertical",
                 columns=1,
                 rows=1,
-                blocks=[CmsBlock(id="presentation-bloc", title="Bloc principal", kind="text")],
-            ),
-            CmsSection(
-                id="cest-quoi-un-fablab",
-                title="C est quoi un FabLab",
-                slug="c-est-quoi-un-fablab",
-                layout="vertical",
-                columns=1,
-                rows=1,
-                blocks=[CmsBlock(id="definition-bloc", title="Bloc principal", kind="text")],
-            ),
-            CmsSection(
-                id="services",
-                title="Services",
-                slug="services",
-                layout="grid",
-                columns=2,
-                rows=2,
-                blocks=[
-                    CmsBlock(id="services-1", title="Bloc 1", kind="custom"),
-                    CmsBlock(id="services-2", title="Bloc 2", kind="custom"),
-                ],
-            ),
-            CmsSection(
-                id="formations",
-                title="Formations",
-                slug="formations",
-                layout="vertical",
-                columns=1,
-                rows=1,
-                blocks=[CmsBlock(id="formations-1", title="Bloc principal", kind="custom")],
-            ),
-            CmsSection(
-                id="faq",
-                title="FAQ",
-                slug="faq",
-                layout="vertical",
-                columns=1,
-                rows=1,
-                blocks=[CmsBlock(id="faq-1", title="Bloc principal", kind="custom")],
-            ),
-            CmsSection(
-                id="machines",
-                title="Details des machines",
-                slug="details-machines",
-                layout="grid",
-                columns=3,
-                rows=2,
-                blocks=[
-                    CmsBlock(id="machines-1", title="Machine 1", kind="custom"),
-                    CmsBlock(id="machines-2", title="Machine 2", kind="custom"),
-                    CmsBlock(id="machines-3", title="Machine 3", kind="custom"),
-                ],
-            ),
-            CmsSection(
-                id="machines-disponibles",
-                title="Machines disponibles",
-                slug="machines-disponibles",
-                layout="horizontal",
-                columns=2,
-                rows=1,
-                blocks=[CmsBlock(id="machines-feed", title="Flux disponibilite", kind="machines_feed")],
-            ),
+                show_in_nav=False,
+                blocks=[],
+            )
         ]
     )
 

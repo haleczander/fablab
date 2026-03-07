@@ -1,48 +1,32 @@
-from collections.abc import Callable
+from pathlib import Path
 
-from sqlmodel import SQLModel
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import inspect
 
-from backend.infrastructure.db import engine
+from backend.infrastructure.db import engine, ensure_sqlite_directory
+from config import BACKEND_DATABASE_URL
 
 
-MigrationFn = Callable[[], None]
-MIGRATIONS: list[tuple[str, MigrationFn]] = []
-
-
-def migration(version: str) -> Callable[[MigrationFn], MigrationFn]:
-    def _register(fn: MigrationFn) -> MigrationFn:
-        MIGRATIONS.append((version, fn))
-        return fn
-
-    return _register
+def _build_alembic_config() -> Config:
+    project_root = Path(__file__).resolve().parents[2]
+    config = Config(str(project_root / "alembic.ini"))
+    config.set_main_option("script_location", str(project_root / "alembic"))
+    config.set_main_option("sqlalchemy.url", BACKEND_DATABASE_URL.replace("%", "%%"))
+    return config
 
 
 def run_db_migrations() -> None:
-    with engine.begin() as connection:
-        connection.exec_driver_sql(
-            """
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-                version VARCHAR(64) PRIMARY KEY,
-                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-            )
-            """
-        )
-        existing = {
-            row[0]
-            for row in connection.exec_driver_sql("SELECT version FROM schema_migrations").fetchall()
-        }
-
-    for version, fn in MIGRATIONS:
-        if version in existing:
-            continue
-        fn()
-        with engine.begin() as connection:
-            connection.exec_driver_sql(
-                "INSERT INTO schema_migrations (version) VALUES (:version)",
-                {"version": version},
-            )
+    ensure_sqlite_directory()
+    command.upgrade(_build_alembic_config(), "head")
 
 
-@migration("001_initial_schema")
-def _initial_schema() -> None:
-    SQLModel.metadata.create_all(engine)
+def get_current_db_revision() -> str | None:
+    ensure_sqlite_directory()
+    with engine.connect() as connection:
+        if not inspect(connection).has_table("alembic_version"):
+            return None
+        result = connection.exec_driver_sql(
+            "SELECT version_num FROM alembic_version"
+        ).fetchone()
+    return None if result is None else str(result[0])

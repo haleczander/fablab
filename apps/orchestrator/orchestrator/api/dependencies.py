@@ -7,10 +7,8 @@ from sqlmodel import Session
 from orchestrator.api.services.orchestrator_notifier import OrchestratorNotifier
 from orchestrator.application.app_services import CommandQueueService, FleetViewService
 from orchestrator.application.ports import (
-    DeviceRuntimeRepositoryPort,
     DiscoverySnapshotPort,
     PrinterBindingRepositoryPort,
-    PrinterRuntimeRepositoryPort,
 )
 from orchestrator.application.use_cases import (
     CreatePrinterJobUseCase,
@@ -45,11 +43,7 @@ from orchestrator.infrastructure.network_discovery.cache import build_rows_from_
 from orchestrator.infrastructure.network_discovery.device_probers import HttpDeviceProber
 from orchestrator.infrastructure.network_discovery.snapshot_store import InMemoryDiscoverySnapshotStore
 from orchestrator.infrastructure.persistence.db import get_session
-from orchestrator.infrastructure.persistence.repositories import (
-    SqlModelDeviceRuntimeRepository,
-    SqlModelPrinterBindingRepository,
-    SqlModelPrinterRuntimeRepository,
-)
+from orchestrator.infrastructure.persistence.repositories import SqlModelPrinterBindingRepository
 from orchestrator.infrastructure.printers.adapter_registry import PrinterAdapterRegistry
 from orchestrator.infrastructure.printers.prusalink_adapter import PrusaLinkAdapter
 from config import (
@@ -87,39 +81,24 @@ def get_domain_service() -> OrchestratorDomainService:
 def get_binding_repo(session: Session = Depends(get_session)) -> PrinterBindingRepositoryPort:
     return SqlModelPrinterBindingRepository(session)
 
-
-def get_printer_runtime_repo(session: Session = Depends(get_session)) -> PrinterRuntimeRepositoryPort:
-    return SqlModelPrinterRuntimeRepository(session)
-
-
-def get_device_runtime_repo(session: Session = Depends(get_session)) -> DeviceRuntimeRepositoryPort:
-    return SqlModelDeviceRuntimeRepository(session)
-
-
 def get_fleet_view_service(
     binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
-    printer_runtime_repo: PrinterRuntimeRepositoryPort = Depends(get_printer_runtime_repo),
-    device_runtime_repo: DeviceRuntimeRepositoryPort = Depends(get_device_runtime_repo),
 ) -> FleetViewService:
     return FleetViewService(
         binding_repo=binding_repo,
-        printer_runtime_repo=printer_runtime_repo,
-        device_runtime_repo=device_runtime_repo,
+        discovery_snapshot_provider=_discovery_snapshot.list_rows,
     )
 
 
 def get_list_device_runtimes_use_case(
-    device_runtime_repo: DeviceRuntimeRepositoryPort = Depends(get_device_runtime_repo),
 ) -> ListDeviceRuntimesUseCase:
-    return ListDeviceRuntimesUseCase(device_runtime_repo)
+    return ListDeviceRuntimesUseCase(_discovery_snapshot.list_rows)
 
 
 def get_list_device_binding_rows_use_case(
-    device_runtime_repo: DeviceRuntimeRepositoryPort = Depends(get_device_runtime_repo),
     binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
 ) -> ListDeviceBindingRowsUseCase:
     return ListDeviceBindingRowsUseCase(
-        device_runtime_repo=device_runtime_repo,
         binding_repo=binding_repo,
         discovery_snapshot_provider=_discovery_snapshot.list_rows,
     )
@@ -175,31 +154,27 @@ def get_orchestrator_notifier(
 
 def get_upsert_binding_use_case(
     binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
-    device_runtime_repo: DeviceRuntimeRepositoryPort = Depends(get_device_runtime_repo),
     domain_service: OrchestratorDomainService = Depends(get_domain_service),
 ) -> UpsertBindingUseCase:
-    return UpsertBindingUseCase(binding_repo, device_runtime_repo, domain_service)
+    return UpsertBindingUseCase(binding_repo, domain_service)
 
 
 def get_upsert_printer_runtime_use_case(
-    printer_runtime_repo: PrinterRuntimeRepositoryPort = Depends(get_printer_runtime_repo),
     backend_gateway: BackendGateway = Depends(get_backend_gateway),
     domain_service: OrchestratorDomainService = Depends(get_domain_service),
 ) -> UpsertPrinterRuntimeUseCase:
     return UpsertPrinterRuntimeUseCase(
-        printer_runtime_repo=printer_runtime_repo,
         backend_gateway=backend_gateway,
         domain_service=domain_service,
     )
 
 
 def get_ingest_device_state_use_case(
-    device_runtime_repo: DeviceRuntimeRepositoryPort = Depends(get_device_runtime_repo),
     binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
     upsert_printer_runtime: UpsertPrinterRuntimeUseCase = Depends(get_upsert_printer_runtime_use_case),
     domain_service: OrchestratorDomainService = Depends(get_domain_service),
 ) -> IngestDeviceStateUseCase:
-    return IngestDeviceStateUseCase(device_runtime_repo, binding_repo, upsert_printer_runtime, domain_service)
+    return IngestDeviceStateUseCase(binding_repo, upsert_printer_runtime, domain_service)
 
 
 def get_binding_by_ip_use_case(
@@ -223,7 +198,7 @@ def get_binding_by_printer_id_use_case(
 def get_binding_by_serial_use_case(
     binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
 ) -> GetBindingBySerialUseCase:
-    return GetBindingBySerialUseCase(binding_repo)
+    return GetBindingBySerialUseCase(binding_repo, _discovery_snapshot.list_rows)
 
 
 def get_enqueue_start_command_use_case() -> EnqueueStartPrintCommandUseCase:
@@ -242,14 +217,22 @@ def get_create_printer_job_use_case(
     binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
     adapter_registry: PrinterAdapterRegistry = Depends(get_printer_adapter_registry),
 ) -> CreatePrinterJobUseCase:
-    return CreatePrinterJobUseCase(binding_repo=binding_repo, adapter_resolver=adapter_registry)
+    return CreatePrinterJobUseCase(
+        binding_repo=binding_repo,
+        adapter_resolver=adapter_registry,
+        discovery_snapshot_provider=_discovery_snapshot.list_rows,
+    )
 
 
 def get_printer_machine_info_use_case(
     binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
     adapter_registry: PrinterAdapterRegistry = Depends(get_printer_adapter_registry),
 ) -> GetPrinterMachineInfoUseCase:
-    return GetPrinterMachineInfoUseCase(binding_repo=binding_repo, adapter_resolver=adapter_registry)
+    return GetPrinterMachineInfoUseCase(
+        binding_repo=binding_repo,
+        adapter_resolver=adapter_registry,
+        discovery_snapshot_provider=_discovery_snapshot.list_rows,
+    )
 
 
 def get_sync_printer_state_use_case(
@@ -261,26 +244,26 @@ def get_sync_printer_state_use_case(
         binding_repo=binding_repo,
         adapter_resolver=adapter_registry,
         upsert_printer_runtime=upsert_printer_runtime,
+        discovery_snapshot_provider=_discovery_snapshot.list_rows,
     )
 
 
 def get_set_device_ignored_use_case(
-    device_runtime_repo: DeviceRuntimeRepositoryPort = Depends(get_device_runtime_repo),
+    binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
 ) -> SetDeviceIgnoredUseCase:
-    return SetDeviceIgnoredUseCase(device_runtime_repo=device_runtime_repo)
+    return SetDeviceIgnoredUseCase(binding_repo=binding_repo)
 
 
 def get_set_device_ignored_by_mac_use_case(
-    device_runtime_repo: DeviceRuntimeRepositoryPort = Depends(get_device_runtime_repo),
+    binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
 ) -> SetDeviceIgnoredByMacUseCase:
-    return SetDeviceIgnoredByMacUseCase(device_runtime_repo=device_runtime_repo)
+    return SetDeviceIgnoredByMacUseCase(binding_repo=binding_repo)
 
 
 def get_unbind_printer_use_case(
     binding_repo: PrinterBindingRepositoryPort = Depends(get_binding_repo),
-    device_runtime_repo: DeviceRuntimeRepositoryPort = Depends(get_device_runtime_repo),
 ) -> UnbindPrinterUseCase:
-    return UnbindPrinterUseCase(binding_repo=binding_repo, device_runtime_repo=device_runtime_repo)
+    return UnbindPrinterUseCase(binding_repo=binding_repo)
 
 
 def get_discover_network_hosts_use_case() -> DiscoverNetworkHostsUseCase:
@@ -307,30 +290,20 @@ def get(interface: type[T], session: Session | None = None) -> T:
         if not session:
             raise ValueError("Session requise pour PrinterBindingRepositoryPort")
         return cast(T, SqlModelPrinterBindingRepository(session))
-    if interface is PrinterRuntimeRepositoryPort:
-        if not session:
-            raise ValueError("Session requise pour PrinterRuntimeRepositoryPort")
-        return cast(T, SqlModelPrinterRuntimeRepository(session))
-    if interface is DeviceRuntimeRepositoryPort:
-        if not session:
-            raise ValueError("Session requise pour DeviceRuntimeRepositoryPort")
-        return cast(T, SqlModelDeviceRuntimeRepository(session))
     if interface is FleetViewService:
         return cast(
             T,
             FleetViewService(
                 binding_repo=get(PrinterBindingRepositoryPort, session=session),
-                printer_runtime_repo=get(PrinterRuntimeRepositoryPort, session=session),
-                device_runtime_repo=get(DeviceRuntimeRepositoryPort, session=session),
+                discovery_snapshot_provider=_discovery_snapshot.list_rows,
             ),
         )
     if interface is ListDeviceRuntimesUseCase:
-        return cast(T, ListDeviceRuntimesUseCase(get(DeviceRuntimeRepositoryPort, session=session)))
+        return cast(T, ListDeviceRuntimesUseCase(_discovery_snapshot.list_rows))
     if interface is ListDeviceBindingRowsUseCase:
         return cast(
             T,
             ListDeviceBindingRowsUseCase(
-                device_runtime_repo=get(DeviceRuntimeRepositoryPort, session=session),
                 binding_repo=get(PrinterBindingRepositoryPort, session=session),
                 discovery_snapshot_provider=_discovery_snapshot.list_rows,
             ),
@@ -348,7 +321,6 @@ def get(interface: type[T], session: Session | None = None) -> T:
             T,
             UpsertBindingUseCase(
                 get(PrinterBindingRepositoryPort, session=session),
-                get(DeviceRuntimeRepositoryPort, session=session),
                 get_domain_service(),
             ),
         )
@@ -356,7 +328,6 @@ def get(interface: type[T], session: Session | None = None) -> T:
         return cast(
             T,
             UpsertPrinterRuntimeUseCase(
-                printer_runtime_repo=get(PrinterRuntimeRepositoryPort, session=session),
                 backend_gateway=get_backend_gateway(),
                 domain_service=get_domain_service(),
             ),
@@ -365,7 +336,6 @@ def get(interface: type[T], session: Session | None = None) -> T:
         return cast(
             T,
             IngestDeviceStateUseCase(
-                get(DeviceRuntimeRepositoryPort, session=session),
                 get(PrinterBindingRepositoryPort, session=session),
                 get(UpsertPrinterRuntimeUseCase, session=session),
                 get_domain_service(),
@@ -376,7 +346,7 @@ def get(interface: type[T], session: Session | None = None) -> T:
     if interface is GetBindingByMacUseCase:
         return cast(T, GetBindingByMacUseCase(get(PrinterBindingRepositoryPort, session=session)))
     if interface is GetBindingBySerialUseCase:
-        return cast(T, GetBindingBySerialUseCase(get(PrinterBindingRepositoryPort, session=session)))
+        return cast(T, GetBindingBySerialUseCase(get(PrinterBindingRepositoryPort, session=session), _discovery_snapshot.list_rows))
     if interface is GetBindingByPrinterIdUseCase:
         return cast(T, GetBindingByPrinterIdUseCase(get(PrinterBindingRepositoryPort, session=session)))
     if interface is EnqueueStartPrintCommandUseCase:
@@ -389,6 +359,7 @@ def get(interface: type[T], session: Session | None = None) -> T:
             CreatePrinterJobUseCase(
                 binding_repo=get(PrinterBindingRepositoryPort, session=session),
                 adapter_resolver=_printer_adapters,
+                discovery_snapshot_provider=_discovery_snapshot.list_rows,
             ),
         )
     if interface is GetPrinterMachineInfoUseCase:
@@ -397,6 +368,7 @@ def get(interface: type[T], session: Session | None = None) -> T:
             GetPrinterMachineInfoUseCase(
                 binding_repo=get(PrinterBindingRepositoryPort, session=session),
                 adapter_resolver=_printer_adapters,
+                discovery_snapshot_provider=_discovery_snapshot.list_rows,
             ),
         )
     if interface is SyncPrinterStateUseCase:
@@ -406,18 +378,18 @@ def get(interface: type[T], session: Session | None = None) -> T:
                 binding_repo=get(PrinterBindingRepositoryPort, session=session),
                 adapter_resolver=_printer_adapters,
                 upsert_printer_runtime=get(UpsertPrinterRuntimeUseCase, session=session),
+                discovery_snapshot_provider=_discovery_snapshot.list_rows,
             ),
         )
     if interface is SetDeviceIgnoredUseCase:
-        return cast(T, SetDeviceIgnoredUseCase(get(DeviceRuntimeRepositoryPort, session=session)))
+        return cast(T, SetDeviceIgnoredUseCase(get(PrinterBindingRepositoryPort, session=session)))
     if interface is SetDeviceIgnoredByMacUseCase:
-        return cast(T, SetDeviceIgnoredByMacUseCase(get(DeviceRuntimeRepositoryPort, session=session)))
+        return cast(T, SetDeviceIgnoredByMacUseCase(get(PrinterBindingRepositoryPort, session=session)))
     if interface is UnbindPrinterUseCase:
         return cast(
             T,
             UnbindPrinterUseCase(
                 binding_repo=get(PrinterBindingRepositoryPort, session=session),
-                device_runtime_repo=get(DeviceRuntimeRepositoryPort, session=session),
             ),
         )
     if interface is DiscoverNetworkHostsUseCase:

@@ -5,15 +5,17 @@ from pydantic import BaseModel, Field
 
 
 LayoutMode = Literal["vertical", "horizontal", "grid"]
-BlockKind = Literal["text", "links", "cta", "machines_feed", "image", "banner", "custom"]
+TextAlign = Literal["left", "center", "right"]
+BlockKind = Literal["heading", "text", "links", "cta", "machines_feed", "image", "banner", "container", "custom"]
 
 
 class CmsBlock(BaseModel):
     id: str = Field(min_length=1, max_length=80)
-    title: str = Field(min_length=1, max_length=120)
+    title: str = Field(default="", max_length=120)
     body: str | None = Field(default=None, max_length=4000)
     image_url: str | None = Field(default=None, max_length=1000)
     kind: BlockKind = "custom"
+    heading_level: int = Field(default=2, ge=1, le=6)
     span_cols: int = Field(default=1, ge=1, le=6)
     span_rows: int = Field(default=1, ge=1, le=12)
     padding: int = Field(default=16, ge=0, le=120)
@@ -21,7 +23,17 @@ class CmsBlock(BaseModel):
     margin_bottom: int = Field(default=0, ge=0, le=160)
     font_size: int = Field(default=16, ge=10, le=64)
     font_family: str | None = Field(default=None, max_length=120)
+    text_color: str | None = Field(default=None, max_length=32)
+    background_color: str | None = Field(default=None, max_length=32)
+    border_color: str | None = Field(default=None, max_length=32)
+    border_width: int = Field(default=0, ge=0, le=24)
+    border_radius: int = Field(default=0, ge=0, le=120)
+    text_align: TextAlign = "left"
     link_to_section_id: str | None = Field(default=None, max_length=80)
+    container_layout: LayoutMode = "vertical"
+    container_columns: int = Field(default=1, ge=1, le=6)
+    container_gap: int = Field(default=16, ge=0, le=80)
+    children: list["CmsBlock"] = Field(default_factory=list)
 
 
 class CmsSection(BaseModel):
@@ -58,3 +70,6 @@ class CmsPublishedSite(BaseModel):
     published: CmsDraft
     published_version: int
     published_at: datetime | None = None
+
+
+CmsBlock.model_rebuild()

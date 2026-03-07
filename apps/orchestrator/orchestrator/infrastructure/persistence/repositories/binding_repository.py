@@ -10,6 +10,9 @@ class SqlModelPrinterBindingRepository:
     def list_all(self) -> list[PrinterBinding]:
         return list(self.session.exec(select(PrinterBinding)).all())
 
+    def get_by_id(self, binding_id: int) -> PrinterBinding | None:
+        return self.session.exec(select(PrinterBinding).where(PrinterBinding.id == binding_id)).first()
+
     def get_by_printer_id(self, printer_id: str) -> PrinterBinding | None:
         return self.session.exec(select(PrinterBinding).where(PrinterBinding.printer_id == printer_id)).first()
 
@@ -18,9 +21,6 @@ class SqlModelPrinterBindingRepository:
 
     def get_by_mac(self, printer_mac: str) -> PrinterBinding | None:
         return self.session.exec(select(PrinterBinding).where(PrinterBinding.printer_mac == printer_mac)).first()
-
-    def get_by_serial(self, printer_serial: str) -> PrinterBinding | None:
-        return self.session.exec(select(PrinterBinding).where(PrinterBinding.printer_serial == printer_serial)).first()
 
     def save(self, row: PrinterBinding) -> PrinterBinding:
         self.session.add(row)

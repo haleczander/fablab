@@ -44,18 +44,22 @@ async def command_start_print(
     job_id = payload.job_id or f"JOB-AUTO-{uuid4().hex[:10].upper()}"
     command = {"type": "START_PRINT", "job_id": job_id, "est_duration_s": payload.est_duration_s}
     queued = 0
-    if (binding.adapter_name or "").lower() == "prusalink":
-        printer_file_path = payload.printer_file_path or f"/local/{job_id}.gcode"
-        try:
-            remote = create_printer_job_use_case.execute(printer_id=printer_id, printer_file_path=printer_file_path)
-        except (LookupError, ValueError) as err:
-            raise HTTPException(status_code=400, detail=str(err)) from err
-        except RuntimeError as err:
-            raise HTTPException(status_code=502, detail=str(err)) from err
+    printer_file_path = payload.printer_file_path or f"/local/{job_id}.gcode"
+    try:
+        remote = create_printer_job_use_case.execute(printer_id=printer_id, printer_file_path=printer_file_path)
         command["remote_adapter"] = remote.get("adapter_name") or "prusalink"
         if remote.get("external_job_id"):
             command["external_job_id"] = str(remote["external_job_id"])
-    else:
+    except ValueError as err:
+        if "adapter non supporte" in str(err):
+            queued = enqueue_start_command_use_case.execute(printer_id, command)
+        else:
+            raise HTTPException(status_code=400, detail=str(err)) from err
+    except LookupError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    except RuntimeError as err:
+        raise HTTPException(status_code=502, detail=str(err)) from err
+    if "remote_adapter" not in command and queued == 0:
         queued = enqueue_start_command_use_case.execute(printer_id, command)
 
     out: dict[str, str | int] = {"printer_id": printer_id, "queued": queued, **command}

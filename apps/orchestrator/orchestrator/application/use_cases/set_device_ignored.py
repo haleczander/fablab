@@ -1,14 +1,14 @@
-from orchestrator.application.ports import DeviceRuntimeRepositoryPort
-from orchestrator.domain.models import DeviceRuntime
+from orchestrator.application.ports import PrinterBindingRepositoryPort
+from orchestrator.domain.models import PrinterBinding
 
 
 class SetDeviceIgnoredUseCase:
-    def __init__(self, device_runtime_repo: DeviceRuntimeRepositoryPort) -> None:
-        self._device_runtime_repo = device_runtime_repo
+    def __init__(self, binding_repo: PrinterBindingRepositoryPort) -> None:
+        self._binding_repo = binding_repo
 
-    def execute(self, device_id: int, is_ignored: bool) -> DeviceRuntime:
-        row = self._device_runtime_repo.get_by_id(device_id)
+    def execute(self, device_id: int, is_ignored: bool) -> PrinterBinding:
+        row = self._binding_repo.get_by_id(device_id)
         if not row:
             raise LookupError("device not found")
         row.is_ignored = is_ignored
-        return self._device_runtime_repo.save(row)
+        return self._binding_repo.save(row)
