@@ -34,7 +34,7 @@ class OrchestratorDomainService:
 
     def new_binding(
         self,
-        printer_id: str,
+        printer_id: str | None,
         printer_mac: str,
         printer_ip: str | None = None,
         printer_model: str | None = None,
@@ -45,7 +45,7 @@ class OrchestratorDomainService:
             printer_mac=printer_mac,
             printer_ip=printer_ip,
             printer_model=printer_model,
-            bound_at=now_utc().isoformat(),
+            bound_at=now_utc().isoformat() if printer_id else None,
             is_ignored=is_ignored,
         )
 

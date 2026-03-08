@@ -22,8 +22,6 @@ class UpsertBindingUseCase:
         _ = adapter_name
         if not printer_mac:
             raise ValueError("printer_mac est requis")
-        if not is_ignored and not printer_id:
-            raise ValueError("printer_id est requis")
 
         by_printer = self.binding_repo.get_by_printer_id(printer_id) if printer_id else None
         by_mac = self.binding_repo.get_by_mac(printer_mac)
@@ -39,6 +37,8 @@ class UpsertBindingUseCase:
             target.is_ignored = is_ignored
             if printer_id and (target.bound_at is None or previous_printer_id != printer_id):
                 target.bound_at = now_utc().isoformat()
+            elif not printer_id:
+                target.bound_at = None
             row = self.binding_repo.save(target)
             await self.notifications.notify_binding_updated(row)
             return row

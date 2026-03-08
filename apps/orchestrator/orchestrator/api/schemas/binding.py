@@ -17,6 +17,4 @@ class BindingInput(BaseModel):
     def validate_binding_target(self) -> "BindingInput":
         if MacAddress.parse(self.printer_mac) is None:
             raise ValueError("printer_mac invalide")
-        if not self.is_ignored and not self.printer_id:
-            raise ValueError("printer_id requis si le binding n'est pas ignore")
         return self
