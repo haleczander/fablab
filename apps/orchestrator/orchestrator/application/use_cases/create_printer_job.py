@@ -1,18 +1,21 @@
-from collections.abc import Callable
-
-from orchestrator.application.dependencies import autowired, discovery_snapshot_provider as get_discovery_snapshot_provider
-from orchestrator.application.ports import PrinterAdapterResolverPort, PrinterBindingPersistencePort
+from orchestrator.application.dependencies import autowired
+from orchestrator.application.ports import (
+    DiscoverySnapshotPort,
+    PrinterAdapterResolverPort,
+    PrinterBindingPersistencePort,
+)
 
 
 class CreatePrinterJobUseCase:
     binding_repo: PrinterBindingPersistencePort = autowired()
     adapter_resolver: PrinterAdapterResolverPort = autowired()
+    discovery_snapshot: DiscoverySnapshotPort = autowired()
 
     def _resolve_snapshot(self, printer_mac: str) -> dict[str, str | bool | int | float | None] | None:
         return next(
             (
                 row
-                for row in get_discovery_snapshot_provider()()
+                for row in self.discovery_snapshot.list_rows()
                 if str(row.get("device_mac") or "").strip() == printer_mac
             ),
             None,

@@ -8,16 +8,16 @@ from urllib.request import Request, urlopen
 
 from sqlmodel import Session, select
 
-from orchestrator.application.app_services import FleetViewService
-from orchestrator.application.use_cases import ListBindingsUseCase, ListExternalDevicesUseCase
+from orchestrator.application.dependencies import get
+from orchestrator.application.use_cases.list_bindings import ListBindingsUseCase
+from orchestrator.application.use_cases.list_external_devices import ListExternalDevicesUseCase
 from orchestrator.domain.models import Device, DeviceParams, DeviceType, IpAddress, MacAddress, Network, NetworkRange
 from orchestrator.domain.models import PrinterBinding
 from orchestrator.infrastructure.network_discovery.arp_scanner import ScapyArpNeighborScanner
 from orchestrator.infrastructure.network_discovery.cache import build_rows_from_discovery, list_snapshot_rows, replace_snapshot
 from orchestrator.infrastructure.network_discovery.device_probers import probe_device
-from orchestrator.infrastructure.notifications import notification_adapter
+from orchestrator.infrastructure.notifications import WebSocketNotificationAdapter
 from orchestrator.infrastructure.persistence.db import engine
-from orchestrator.infrastructure.persistence.repositories import SqlModelPrinterBindingRepository
 from orchestrator.infrastructure.state.live_machine_state import upsert_machine_state
 
 
@@ -183,6 +183,14 @@ def refresh_bound_printers_once(timeout_s: float) -> int:
     return updated
 
 
+async def _notify_current_rows() -> None:
+    rows = get(ListBindingsUseCase).execute(include_ignored=True)
+    external_rows = get(ListExternalDevicesUseCase).execute()
+    notifications = get(WebSocketNotificationAdapter)
+    await notifications.notify_device_rows(rows)
+    await notifications.notify_external_rows(external_rows)
+
+
 async def discovery_loop(
     stop_event: asyncio.Event,
     cidr: str,
@@ -203,18 +211,7 @@ async def discovery_loop(
                 refresh_bound=False,
             )
             if updated > 0:
-                with Session(engine) as session:
-                    fleet = FleetViewService(
-                        binding_repo=SqlModelPrinterBindingRepository(session),
-                        discovery_snapshot_provider=list_snapshot_rows,
-                    )
-                    rows = ListBindingsUseCase(
-                        binding_repo=SqlModelPrinterBindingRepository(session),
-                        discovery_snapshot_provider=list_snapshot_rows,
-                    ).execute(include_ignored=True)
-                    external_rows = ListExternalDevicesUseCase(fleet).execute()
-                    await notification_adapter.notify_device_rows(rows)
-                    await notification_adapter.notify_external_rows(external_rows)
+                await _notify_current_rows()
         except Exception:
             pass
         try:
@@ -232,18 +229,7 @@ async def bound_refresh_loop(
         try:
             updated = await asyncio.to_thread(refresh_bound_printers_once, timeout_s=timeout_s)
             if updated > 0:
-                with Session(engine) as session:
-                    fleet = FleetViewService(
-                        binding_repo=SqlModelPrinterBindingRepository(session),
-                        discovery_snapshot_provider=list_snapshot_rows,
-                    )
-                    rows = ListBindingsUseCase(
-                        binding_repo=SqlModelPrinterBindingRepository(session),
-                        discovery_snapshot_provider=list_snapshot_rows,
-                    ).execute(include_ignored=True)
-                    external_rows = ListExternalDevicesUseCase(fleet).execute()
-                    await notification_adapter.notify_device_rows(rows)
-                    await notification_adapter.notify_external_rows(external_rows)
+                await _notify_current_rows()
         except Exception:
             pass
         try:

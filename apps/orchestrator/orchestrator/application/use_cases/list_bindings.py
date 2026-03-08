@@ -1,12 +1,11 @@
-from typing import Callable
-
-from orchestrator.application.dependencies import autowired, discovery_snapshot_provider as get_discovery_snapshot_provider
-from orchestrator.application.ports import PrinterBindingPersistencePort
+from orchestrator.application.dependencies import autowired
+from orchestrator.application.ports import DiscoverySnapshotPort, PrinterBindingPersistencePort
 from orchestrator.infrastructure.state.live_machine_state import get_machine_state
 
 
 class ListBindingsUseCase:
     binding_repo: PrinterBindingPersistencePort = autowired()
+    discovery_snapshot: DiscoverySnapshotPort = autowired()
 
     @staticmethod
     def _row_key(row: dict[str, str | bool | int | float | None]) -> str:
@@ -22,7 +21,7 @@ class ListBindingsUseCase:
         binding_by_mac = {binding.printer_mac: binding for binding in bindings if binding.printer_mac}
 
         emitted_keys: set[str] = set()
-        for item in get_discovery_snapshot_provider()():
+        for item in self.discovery_snapshot.list_rows():
             key = self._row_key(item)
             if not key or key in emitted_keys:
                 continue

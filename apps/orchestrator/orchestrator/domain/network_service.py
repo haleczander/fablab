@@ -4,23 +4,29 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from orchestrator.application.ports import ArpNeighborScannerPort, DeviceProberPort
 from orchestrator.domain.models import Device, DeviceParams, DeviceType, IpAddress, MacAddress, Network
+from orchestrator.shared.autowired import autowired
 
 
 class NetworkDiscoveryService:
+    arp_scanner: ArpNeighborScannerPort = autowired()
+    device_prober: DeviceProberPort = autowired()
+
     def __init__(
         self,
-        arp_scanner: ArpNeighborScannerPort,
-        device_prober: DeviceProberPort,
+        arp_scanner: ArpNeighborScannerPort | None = None,
+        device_prober: DeviceProberPort | None = None,
     ) -> None:
-        self._arp_scanner = arp_scanner
-        self._device_prober = device_prober
+        if arp_scanner is not None:
+            self.arp_scanner = arp_scanner
+        if device_prober is not None:
+            self.device_prober = device_prober
 
     def discover(
         self,
         network: Network,
         timeout_s: float,
     ) -> list[Device]:
-        arp_table = self._arp_scanner.scan(
+        arp_table = self.arp_scanner.scan(
             network=network.range.network_address,
             subnet_mask=network.range.subnet_mask,
             timeout_s=timeout_s,
@@ -45,7 +51,7 @@ class NetworkDiscoveryService:
         candidates = [device for device in devices if device.ip is not None]
         with ThreadPoolExecutor(max_workers=min(64, len(candidates) or 1)) as pool:
             futures = {
-                pool.submit(self._device_prober.probe, str(device.ip), timeout_s): device
+                pool.submit(self.device_prober.probe, str(device.ip), timeout_s): device
                 for device in candidates
             }
             for future in as_completed(futures):

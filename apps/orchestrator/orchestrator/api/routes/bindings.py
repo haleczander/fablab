@@ -2,7 +2,9 @@ from fastapi import APIRouter, HTTPException, Response
 
 from orchestrator.api.schemas import BindingInput
 from orchestrator.application.dependencies import autowired
-from orchestrator.application.use_cases import ListBindingsUseCase, UnbindPrinterUseCase, UpsertBindingUseCase
+from orchestrator.application.use_cases.list_bindings import ListBindingsUseCase
+from orchestrator.application.use_cases.unbind_printer import UnbindPrinterUseCase
+from orchestrator.application.use_cases.upsert_binding import UpsertBindingUseCase
 from orchestrator.domain.models import MacAddress, PrinterBinding
 
 router = APIRouter(prefix="/bindings", tags=["orchestrator"])
@@ -57,4 +59,3 @@ controller = BindingsController()
 router.add_api_route("", controller.list_bindings, methods=["GET"])
 router.add_api_route("/{device_mac}", controller.upsert_binding, methods=["PUT"], response_model=PrinterBinding)
 router.add_api_route("/{device_mac}", controller.unbind_printer, methods=["DELETE"], status_code=204)
-

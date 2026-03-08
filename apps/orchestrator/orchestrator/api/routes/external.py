@@ -3,7 +3,7 @@ import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from orchestrator.application.dependencies import autowired
-from orchestrator.application.use_cases import ListExternalDevicesUseCase
+from orchestrator.application.use_cases.list_external_devices import ListExternalDevicesUseCase
 from orchestrator.infrastructure.notifications import WebSocketNotificationAdapter
 
 router = APIRouter(prefix="/external", tags=["external"])

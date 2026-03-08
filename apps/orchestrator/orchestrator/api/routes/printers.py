@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from orchestrator.api.schemas import StartPrintCommandInput
 from orchestrator.application.dependencies import autowired
-from orchestrator.application.use_cases import StartPrintCommandUseCase
+from orchestrator.application.use_cases.start_print_command import StartPrintCommandUseCase
 
 router = APIRouter(prefix="/printers", tags=["orchestrator"])
 
@@ -32,4 +32,3 @@ class PrintersController:
 
 controller = PrintersController()
 router.add_api_route("/{printer_id}/commands/start", controller.command_start_print, methods=["POST"])
-

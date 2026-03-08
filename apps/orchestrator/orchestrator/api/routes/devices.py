@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from config import ORCH_DISCOVERY_CIDRS, ORCH_DISCOVERY_TIMEOUT_S
 from orchestrator.application.dependencies import autowired
-from orchestrator.application.use_cases import DiscoverDevicesUseCase, ListBindingsUseCase
+from orchestrator.application.use_cases.discover_devices import DiscoverDevicesUseCase
+from orchestrator.application.use_cases.list_bindings import ListBindingsUseCase
 from orchestrator.infrastructure.notifications import WebSocketNotificationAdapter
 
 router = APIRouter(prefix="/devices", tags=["orchestrator"])

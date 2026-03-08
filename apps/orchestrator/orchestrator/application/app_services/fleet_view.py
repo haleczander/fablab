@@ -1,24 +1,34 @@
 from collections.abc import Callable
 
-from orchestrator.application.ports import PrinterBindingPersistencePort
+from orchestrator.application.ports import DiscoverySnapshotPort, PrinterBindingPersistencePort
 from orchestrator.domain.services import OrchestratorDomainService
 from orchestrator.infrastructure.state.live_machine_state import get_machine_state
+from orchestrator.shared.autowired import autowired
 
 
 class FleetViewService:
     SUPPORTED_ADAPTERS = {"prusalink"}
+    binding_repo: PrinterBindingPersistencePort = autowired()
+    discovery_snapshot: DiscoverySnapshotPort = autowired()
+    domain_service: OrchestratorDomainService = autowired()
 
     def __init__(
         self,
-        binding_repo: PrinterBindingPersistencePort,
-        discovery_snapshot_provider: Callable[[], list[dict[str, str | bool | int | float | None]]],
+        binding_repo: PrinterBindingPersistencePort | None = None,
+        discovery_snapshot: DiscoverySnapshotPort | None = None,
+        discovery_snapshot_provider: Callable[[], list[dict[str, str | bool | int | float | None]]] | None = None,
     ) -> None:
-        self.binding_repo = binding_repo
-        self.discovery_snapshot_provider = discovery_snapshot_provider
-        self._domain_service = OrchestratorDomainService()
+        if binding_repo is not None:
+            self.binding_repo = binding_repo
+        if discovery_snapshot is not None:
+            self.discovery_snapshot = discovery_snapshot
+        if discovery_snapshot_provider is not None:
+            self._snapshot_provider_override = discovery_snapshot_provider
 
     def _snapshot_rows(self) -> list[dict[str, str | bool | int | float | None]]:
-        return self.discovery_snapshot_provider() or []
+        if hasattr(self, "_snapshot_provider_override"):
+            return self._snapshot_provider_override() or []
+        return self.discovery_snapshot.list_rows() or []
 
     def _snapshot_by_mac(self) -> dict[str, dict[str, str | bool | int | float | None]]:
         out: dict[str, dict[str, str | bool | int | float | None]] = {}
@@ -36,7 +46,7 @@ class FleetViewService:
                 continue
             device = snapshot_by_mac.get(binding.printer_mac)
             live = get_machine_state(binding.printer_id)
-            domain_device = self._domain_service.device_from_snapshot(device or {}, binding=binding)
+            domain_device = self.domain_service.device_from_snapshot(device or {}, binding=binding)
 
             rows.append(
                 {
@@ -65,7 +75,7 @@ class FleetViewService:
             binding = bindings_by_mac.get(mac) if mac else None
             if binding and binding.printer_id:
                 continue
-            device = self._domain_service.device_from_snapshot(item, binding=binding)
+            device = self.domain_service.device_from_snapshot(item, binding=binding)
             rows.append(
                 {
                     "device_ip": str(device.ip) if device.ip else None,

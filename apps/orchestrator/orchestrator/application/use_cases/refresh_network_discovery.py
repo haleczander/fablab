@@ -1,6 +1,4 @@
-from typing import Callable
-
-from orchestrator.application.dependencies import autowired, discovery_rows_builder as get_discovery_rows_builder
+from orchestrator.application.dependencies import autowired
 from orchestrator.application.ports import DiscoverySnapshotPort, PrinterBindingPersistencePort
 from orchestrator.domain.models import Network, NetworkRange
 from orchestrator.domain.network_service import NetworkDiscoveryService
@@ -24,5 +22,5 @@ class RefreshNetworkDiscoveryUseCase:
         )
         merged = self.network_service.merge(network, discovered)
         self.network_service.probe(merged.devices, timeout_s=timeout_s)
-        self.discovery_snapshot.replace_rows(get_discovery_rows_builder()(merged))
+        self.discovery_snapshot.replace_from_network(merged)
         return len(merged.devices)
