@@ -1,10 +1,10 @@
-from orchestrator.application.app_services import FleetViewService
+from orchestrator.application.dependencies import autowired
+from orchestrator.application.app_services.fleet_view import FleetViewService
 
 
 class ListFleetUseCase:
-    def __init__(self, fleet_view: FleetViewService) -> None:
-        self._fleet_view = fleet_view
+    fleet_view: FleetViewService = autowired()
 
     def execute(self) -> list[dict[str, str | None]]:
-        return self._fleet_view.list_fleet()
+        return self.fleet_view.list_fleet()
 

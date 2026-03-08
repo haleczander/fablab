@@ -9,7 +9,7 @@ from config import (
     ORCH_DISCOVERY_INTERVAL_S,
     ORCH_DISCOVERY_TIMEOUT_S,
 )
-from orchestrator.api.routes.orchestrator import router as orchestrator_router
+from orchestrator.api.routes import router as orchestrator_router
 from orchestrator.infrastructure.network_discovery.runtime import bound_refresh_loop, discovery_loop
 from orchestrator.infrastructure.persistence.db import init_db
 

@@ -5,9 +5,9 @@ from fastapi.responses import FileResponse
 
 router = APIRouter(tags=["orchestrator"])
 
-_TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "templates" / "dashboard.html"
-_CSS_PATH = Path(__file__).resolve().parents[2] / "templates" / "dashboard.css"
-_JS_PATH = Path(__file__).resolve().parents[2] / "templates" / "dashboard.js"
+_TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "dashboard.html"
+_CSS_PATH = Path(__file__).resolve().parents[1] / "templates" / "dashboard.css"
+_JS_PATH = Path(__file__).resolve().parents[1] / "templates" / "dashboard.js"
 
 
 @router.get("/dashboard", response_class=FileResponse)

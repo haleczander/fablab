@@ -1,11 +1,11 @@
-from orchestrator.application.ports import PrinterBindingRepositoryPort
+from orchestrator.application.dependencies import autowired
+from orchestrator.application.ports import PrinterBindingPersistencePort
 from orchestrator.domain.models import PrinterBinding
 
 
 class GetBindingByPrinterIdUseCase:
-    def __init__(self, binding_repo: PrinterBindingRepositoryPort) -> None:
-        self._binding_repo = binding_repo
+    binding_repo: PrinterBindingPersistencePort = autowired()
 
     def execute(self, printer_id: str) -> PrinterBinding | None:
-        return self._binding_repo.get_by_printer_id(printer_id)
+        return self.binding_repo.get_by_printer_id(printer_id)
 

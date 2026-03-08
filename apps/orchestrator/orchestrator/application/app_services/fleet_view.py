@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from orchestrator.application.ports import PrinterBindingRepositoryPort
+from orchestrator.application.ports import PrinterBindingPersistencePort
 from orchestrator.domain.services import OrchestratorDomainService
 from orchestrator.infrastructure.state.live_machine_state import get_machine_state
 
@@ -10,7 +10,7 @@ class FleetViewService:
 
     def __init__(
         self,
-        binding_repo: PrinterBindingRepositoryPort,
+        binding_repo: PrinterBindingPersistencePort,
         discovery_snapshot_provider: Callable[[], list[dict[str, str | bool | int | float | None]]],
     ) -> None:
         self.binding_repo = binding_repo

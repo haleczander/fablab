@@ -1,13 +1,13 @@
-from orchestrator.application.app_services import FleetViewService
+from orchestrator.application.dependencies import autowired
+from orchestrator.application.app_services.fleet_view import FleetViewService
 
 
 class ListExternalDevicesUseCase:
-    def __init__(self, fleet_view: FleetViewService) -> None:
-        self._fleet_view = fleet_view
+    fleet_view: FleetViewService = autowired()
 
     def execute(self) -> list[dict[str, str | None]]:
         rows: list[dict[str, str | None]] = []
-        for item in self._fleet_view.machine_states_payload():
+        for item in self.fleet_view.machine_states_payload():
             rows.append(
                 {
                     "printer_id": item.get("printer_id"),
