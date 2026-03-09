@@ -6,7 +6,7 @@ from sqlalchemy.engine import make_url
 from sqlmodel import Session, SQLModel, create_engine
 
 from config import ORCH_DATABASE_URL
-from orchestrator.domain import models as _models  # noqa: F401
+from orchestrator.infrastructure.persistence import models as _models  # noqa: F401
 
 engine = create_engine(ORCH_DATABASE_URL, echo=False, pool_pre_ping=True)
 
@@ -20,31 +20,25 @@ def _ensure_sqlite_directory() -> None:
     Path(database).parent.mkdir(parents=True, exist_ok=True)
 
 
-def _needs_binding_schema_reset() -> bool:
-    with engine.connect() as conn:
+def _ensure_binding_columns() -> None:
+    with engine.begin() as conn:
         table_exists = conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='printer_bindings'")
         ).fetchone()
         if not table_exists:
-            return False
+            return
+
         cols = conn.execute(text("PRAGMA table_info('printer_bindings')")).fetchall()
         col_names = {str(col[1]) for col in cols}
-        required = {"printer_id", "printer_mac", "printer_ip", "is_ignored"}
-        return not required.issubset(col_names)
-
-
-def _reset_local_tables() -> None:
-    with engine.begin() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS printer_bindings"))
-        conn.execute(text("DROP TABLE IF EXISTS device_runtimes"))
-        conn.execute(text("DROP TABLE IF EXISTS printer_runtimes"))
+        if "bound_at" not in col_names:
+            conn.execute(text("ALTER TABLE printer_bindings ADD COLUMN bound_at TEXT"))
 
 
 def init_db() -> None:
     _ensure_sqlite_directory()
-    if ORCH_DATABASE_URL.startswith("sqlite") and _needs_binding_schema_reset():
-        _reset_local_tables()
     SQLModel.metadata.create_all(engine)
+    if ORCH_DATABASE_URL.startswith("sqlite"):
+        _ensure_binding_columns()
 
 
 def get_session() -> Generator[Session, None, None]:

@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from threading import Lock
 
+from orchestrator.domain.models import Network
+
 _snapshot_lock = Lock()
 _snapshot_rows: dict[str, dict[str, str | bool | int | float | None]] = {}
 
@@ -24,32 +26,30 @@ def replace_snapshot(rows: list[dict[str, str | bool | int | float | None]]) -> 
         _snapshot_rows.update(keyed)
 
 
-def build_rows_from_discovery(
-    discovered: dict[str, tuple[str | None, str | None, str | None, bool]],
-    arp: dict[str, str],
-) -> list[dict[str, str | bool | int | float | None]]:
+def build_rows_from_discovery(network: Network) -> list[dict[str, str | bool | int | float | None]]:
     stamp = datetime.now(timezone.utc).isoformat()
     rows: list[dict[str, str | bool | int | float | None]] = []
-    for ip, host in discovered.items():
-        adapter_name, model_hint, serial_hint, reachable = host
-        status = "ON" if reachable else "OFF"
+    for device in network.devices:
+        ip = str(device.ip) if device.ip else None
+        mac = str(device.mac) if device.mac else None
+        status = device.params.status or "OFF"
         rows.append(
             {
                 "device_ip": ip,
-                "device_mac": arp.get(ip),
-                "device_serial": serial_hint,
+                "device_mac": mac,
+                "device_serial": device.serial,
                 "device_id": None,
-                "detected_adapter": adapter_name,
-                "detected_model": model_hint,
+                "detected_adapter": str(device.type),
+                "detected_model": device.model,
                 "status": status,
-                "current_job_id": None,
-                "progress_pct": None,
-                "nozzle_temp_c": None,
-                "bed_temp_c": None,
-                "last_heartbeat_at": stamp,
+                "current_job_id": device.params.current_job_id,
+                "progress_pct": device.params.progress_pct,
+                "nozzle_temp_c": device.params.nozzle_temp_c,
+                "bed_temp_c": device.params.bed_temp_c,
+                "last_heartbeat_at": device.params.last_heartbeat_at or stamp,
                 "is_bound": False,
-                "is_ignored": False,
-                "printer_id": None,
+                "is_ignored": device.ignored,
+                "printer_id": device.business_id,
                 "printer_model": None,
             }
         )

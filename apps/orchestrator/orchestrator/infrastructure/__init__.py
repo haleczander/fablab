@@ -1,6 +1,3 @@
-
-
-from orchestrator.infrastructure.backend import BackendGateway
 from orchestrator.infrastructure.network_discovery import (
     HttpDeviceProber,
     InMemoryDiscoverySnapshotStore,

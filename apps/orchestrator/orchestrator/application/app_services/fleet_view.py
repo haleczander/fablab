@@ -1,23 +1,34 @@
 from collections.abc import Callable
 
-from orchestrator.application.ports import PrinterBindingRepositoryPort
-from orchestrator.domain.models import DeviceRuntime
+from orchestrator.application.ports import DiscoverySnapshotPort, PrinterBindingPersistencePort
+from orchestrator.domain.services import OrchestratorDomainService
 from orchestrator.infrastructure.state.live_machine_state import get_machine_state
+from orchestrator.shared.autowired import autowired
 
 
 class FleetViewService:
     SUPPORTED_ADAPTERS = {"prusalink"}
+    binding_repo: PrinterBindingPersistencePort = autowired()
+    discovery_snapshot: DiscoverySnapshotPort = autowired()
+    domain_service: OrchestratorDomainService = autowired()
 
     def __init__(
         self,
-        binding_repo: PrinterBindingRepositoryPort,
-        discovery_snapshot_provider: Callable[[], list[dict[str, str | bool | int | float | None]]],
+        binding_repo: PrinterBindingPersistencePort | None = None,
+        discovery_snapshot: DiscoverySnapshotPort | None = None,
+        discovery_snapshot_provider: Callable[[], list[dict[str, str | bool | int | float | None]]] | None = None,
     ) -> None:
-        self.binding_repo = binding_repo
-        self.discovery_snapshot_provider = discovery_snapshot_provider
+        if binding_repo is not None:
+            self.binding_repo = binding_repo
+        if discovery_snapshot is not None:
+            self.discovery_snapshot = discovery_snapshot
+        if discovery_snapshot_provider is not None:
+            self._snapshot_provider_override = discovery_snapshot_provider
 
     def _snapshot_rows(self) -> list[dict[str, str | bool | int | float | None]]:
-        return self.discovery_snapshot_provider() or []
+        if hasattr(self, "_snapshot_provider_override"):
+            return self._snapshot_provider_override() or []
+        return self.discovery_snapshot.list_rows() or []
 
     def _snapshot_by_mac(self) -> dict[str, dict[str, str | bool | int | float | None]]:
         out: dict[str, dict[str, str | bool | int | float | None]] = {}
@@ -27,35 +38,6 @@ class FleetViewService:
                 out[mac] = row
         return out
 
-    def _row_to_device(
-        self,
-        row: dict[str, str | bool | int | float | None],
-        *,
-        binding_printer_id: str | None = None,
-        is_ignored: bool = False,
-    ) -> DeviceRuntime:
-        last_heartbeat = row.get("last_heartbeat_at")
-        return DeviceRuntime(
-            device_ip=str(row.get("device_ip") or ""),
-            device_mac=str(row.get("device_mac") or "") or None,
-            device_serial=str(row.get("device_serial") or "") or None,
-            is_bound=binding_printer_id is not None,
-            is_ignored=is_ignored,
-            bound_printer_id=binding_printer_id,
-            detected_model=str(row.get("detected_model") or "") or None,
-            detected_adapter=str(row.get("detected_adapter") or "") or None,
-            probe_reachable=bool(row.get("status")),
-            status=str(row.get("status") or "OFF"),
-            current_job_id=str(row.get("current_job_id") or "") or None,
-            progress_pct=float(row["progress_pct"]) if row.get("progress_pct") is not None else None,
-            nozzle_temp_c=float(row["nozzle_temp_c"]) if row.get("nozzle_temp_c") is not None else None,
-            bed_temp_c=float(row["bed_temp_c"]) if row.get("bed_temp_c") is not None else None,
-            last_printer_ip=str(row.get("device_ip") or "") or None,
-            last_printer_mac=str(row.get("device_mac") or "") or None,
-            last_printer_serial=str(row.get("device_serial") or "") or None,
-            last_heartbeat_at=last_heartbeat,  # type: ignore[arg-type]
-        )
-
     def list_fleet(self) -> list[dict[str, str | None]]:
         rows: list[dict[str, str | None]] = []
         snapshot_by_mac = self._snapshot_by_mac()
@@ -64,15 +46,16 @@ class FleetViewService:
                 continue
             device = snapshot_by_mac.get(binding.printer_mac)
             live = get_machine_state(binding.printer_id)
+            domain_device = self.domain_service.device_from_snapshot(device or {}, binding=binding)
 
             rows.append(
                 {
                     "printer_id": binding.printer_id,
-                    "printer_ip": str(device.get("device_ip")) if device and device.get("device_ip") is not None else None,
-                    "printer_mac": binding.printer_mac,
-                    "printer_serial": str(device.get("device_serial")) if device and device.get("device_serial") is not None else None,
-                    "printer_model": str(device.get("detected_model")) if device and device.get("detected_model") is not None else None,
-                    "adapter_name": str(device.get("detected_adapter")) if device and device.get("detected_adapter") is not None else None,
+                    "printer_ip": str(domain_device.ip) if domain_device.ip else None,
+                    "printer_mac": str(domain_device.mac) if domain_device.mac else binding.printer_mac,
+                    "printer_serial": domain_device.serial,
+                    "printer_model": domain_device.model,
+                    "adapter_name": str(domain_device.type),
                     "status": str(live.get("status")) if live and live.get("status") is not None else None,
                     "current_job_id": str(live.get("current_job_id")) if live and live.get("current_job_id") is not None else None,
                     "progress_pct": str(live.get("progress_pct")) if live and live.get("progress_pct") is not None else None,
@@ -92,40 +75,16 @@ class FleetViewService:
             binding = bindings_by_mac.get(mac) if mac else None
             if binding and binding.printer_id:
                 continue
+            device = self.domain_service.device_from_snapshot(item, binding=binding)
             rows.append(
                 {
-                    "device_ip": str(item.get("device_ip") or "") or None,
-                    "device_mac": str(item.get("device_mac") or "") or None,
-                    "device_serial": str(item.get("device_serial") or "") or None,
-                    "status": str(item.get("status") or "") or None,
-                    "detected_model": str(item.get("detected_model") or "") or None,
-                    "detected_adapter": str(item.get("detected_adapter") or "") or None,
-                    "last_heartbeat_at": str(item.get("last_heartbeat_at") or "") or None,
-                }
-            )
-        rows.sort(key=lambda r: r["device_ip"] or "")
-        return rows
-
-    def list_unmatched_contract_devices(self) -> list[dict[str, str | None]]:
-        rows: list[dict[str, str | None]] = []
-        bindings_by_mac = {row.printer_mac: row for row in self.binding_repo.list_all()}
-        for item in self._snapshot_rows():
-            mac = str(item.get("device_mac") or "").strip()
-            binding = bindings_by_mac.get(mac) if mac else None
-            if binding and binding.is_ignored:
-                continue
-            adapter = str(item.get("detected_adapter") or "").lower()
-            if adapter in self.SUPPORTED_ADAPTERS:
-                continue
-            rows.append(
-                {
-                    "device_ip": str(item.get("device_ip") or "") or None,
-                    "device_mac": str(item.get("device_mac") or "") or None,
-                    "device_serial": str(item.get("device_serial") or "") or None,
-                    "status": str(item.get("status") or "") or None,
-                    "detected_model": str(item.get("detected_model") or "") or None,
-                    "detected_adapter": str(item.get("detected_adapter") or "") or None,
-                    "last_heartbeat_at": str(item.get("last_heartbeat_at") or "") or None,
+                    "device_ip": str(device.ip) if device.ip else None,
+                    "device_mac": str(device.mac) if device.mac else None,
+                    "device_serial": device.serial,
+                    "status": device.params.status,
+                    "detected_model": device.model,
+                    "detected_adapter": str(device.type),
+                    "last_heartbeat_at": device.params.last_heartbeat_at,
                 }
             )
         rows.sort(key=lambda r: r["device_ip"] or "")
@@ -176,7 +135,7 @@ class FleetViewService:
                     "printer_ip": str(item.get("device_ip") or "") or binding.printer_ip or None,
                     "printer_mac": binding.printer_mac or mac or None,
                     "printer_serial": str(item.get("device_serial") or "") or None,
-                    "printer_model": str(item.get("detected_model") or "") or None,
+                    "printer_model": binding.printer_model or (str(item.get("detected_model") or "") or None),
                     "last_heartbeat_at": str(last_heartbeat_at) if last_heartbeat_at is not None else None,
                     "machine_id": machine_id,
                     "status": str(status) if status is not None else None,
@@ -198,7 +157,7 @@ class FleetViewService:
                     "printer_ip": binding.printer_ip,
                     "printer_mac": binding.printer_mac,
                     "printer_serial": None,
-                    "printer_model": None,
+                    "printer_model": binding.printer_model,
                     "last_heartbeat_at": str(live.get("last_heartbeat_at")) if live and live.get("last_heartbeat_at") is not None else None,
                     "machine_id": binding.printer_id,
                     "status": str(live.get("status")) if live and live.get("status") is not None else "OFF",

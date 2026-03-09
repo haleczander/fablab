@@ -8,7 +8,7 @@ from urllib.request import (
     build_opener,
 )
 
-from orchestrator.domain.schemas import PrinterStateInput
+from orchestrator.application.dto import PrinterStateInput
 
 
 class PrusaLinkApiError(RuntimeError):

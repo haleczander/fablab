@@ -1,9 +1,9 @@
-from orchestrator.application.app_services import FleetViewService
+from orchestrator.application.dependencies import autowired
+from orchestrator.application.app_services.fleet_view import FleetViewService
 
 
 class MachineStatesPayloadUseCase:
-    def __init__(self, fleet_view: FleetViewService) -> None:
-        self.fleet_view = fleet_view
+    fleet_view: FleetViewService = autowired()
 
     def execute(self) -> list[dict[str, str | None]]:
         return self.fleet_view.machine_states_payload()

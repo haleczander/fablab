@@ -1,14 +1,12 @@
-from typing import Optional
-
-from sqlmodel import Field, SQLModel
+from pydantic import BaseModel
 
 
-class PrinterBinding(SQLModel, table=True):
-    __tablename__ = "printer_bindings"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    printer_id: Optional[str] = Field(default=None, index=True, unique=True)
-    printer_mac: str = Field(index=True, unique=True)
-    printer_ip: Optional[str] = Field(default=None, index=True)
-    is_ignored: bool = Field(default=False, index=True)
+class PrinterBinding(BaseModel):
+    id: int | None = None
+    printer_id: str | None = None
+    printer_mac: str
+    printer_ip: str | None = None
+    printer_model: str | None = None
+    bound_at: str | None = None
+    is_ignored: bool = False
 

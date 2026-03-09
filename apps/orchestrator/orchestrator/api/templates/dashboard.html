@@ -19,9 +19,8 @@
 
     <section class="card">
       <div class="section-head">
-        <h3>Devices disponibles (non bindes)</h3>
+        <h3>Devices disponibles</h3>
         <div class="section-actions">
-          <button id="showAllBtn" class="btn-secondary" onclick="toggleShowAllAvailable()">Tout voir</button>
           <button id="scanBtn" class="icon-btn" onclick="refreshNetworkDiscovery()" aria-label="Refresh reseau" title="Refresh reseau">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6" />
@@ -38,11 +37,10 @@
         <table id="availableTable">
           <thead>
             <tr>
-              <th class="dot-col"></th>
-              <th>id metier</th>
-              <th>modele</th>
+              <th class="status-col"></th>
+              <th class="compact-col">id metier</th>
+              <th class="compact-col">modele</th>
               <th>contrat</th>
-              <th>reseau</th>
               <th>action</th>
             </tr>
           </thead>
@@ -58,11 +56,27 @@
         <table id="boundTable">
           <thead>
             <tr>
-              <th class="dot-col"></th>
-              <th>id metier</th>
-              <th>modele</th>
+              <th class="status-col"></th>
+              <th class="compact-col">id metier</th>
+              <th class="compact-col">modele</th>
               <th>contrat</th>
-              <th>reseau</th>
+              <th>action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Devices ignores</h3>
+      <p id="ignoredMsg" class="muted"></p>
+      <div class="table-wrap">
+        <table id="ignoredTable">
+          <thead>
+            <tr>
+              <th class="status-col"></th>
+              <th>contrat</th>
               <th>action</th>
             </tr>
           </thead>

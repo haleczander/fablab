@@ -8,27 +8,17 @@ from urllib.request import Request, urlopen
 
 from sqlmodel import Session, select
 
-from orchestrator.api.events import broadcast_machines
-from orchestrator.application.app_services import FleetViewService
-from orchestrator.domain.mac import normalize_mac
+from orchestrator.application.dependencies import get
+from orchestrator.application.use_cases.list_bindings import ListBindingsUseCase
+from orchestrator.application.use_cases.list_external_devices import ListExternalDevicesUseCase
+from orchestrator.domain.models import Device, DeviceParams, DeviceType, IpAddress, MacAddress, Network, NetworkRange
 from orchestrator.domain.models import PrinterBinding
 from orchestrator.infrastructure.network_discovery.arp_scanner import ScapyArpNeighborScanner
 from orchestrator.infrastructure.network_discovery.cache import build_rows_from_discovery, list_snapshot_rows, replace_snapshot
 from orchestrator.infrastructure.network_discovery.device_probers import probe_device
+from orchestrator.infrastructure.notifications import WebSocketNotificationAdapter
 from orchestrator.infrastructure.persistence.db import engine
-from orchestrator.infrastructure.persistence.repositories import SqlModelPrinterBindingRepository
 from orchestrator.infrastructure.state.live_machine_state import upsert_machine_state
-
-
-def _parse_cidrs(raw: str) -> list[str]:
-    cidrs: list[str] = []
-    for chunk in raw.split(","):
-        item = chunk.strip()
-        if not item:
-            continue
-        ipaddress.ip_network(item, strict=False)
-        cidrs.append(item)
-    return cidrs
 
 
 def _read_arp_table() -> dict[str, str]:
@@ -43,9 +33,9 @@ def _read_arp_table() -> dict[str, str]:
         if len(parts) < 4:
             continue
         ip = parts[0]
-        mac = normalize_mac(parts[3])
-        if mac:
-            table[ip] = mac
+        parsed = MacAddress.parse(parts[3])
+        if parsed:
+            table[ip] = str(parsed)
     return table
 
 
@@ -137,60 +127,27 @@ def _refresh_bound_printers(session: Session, timeout_s: float, now: datetime) -
     return updated
 
 
-def persist_discovery(
-    discovered: dict[str, tuple[str | None, str | None, str | None, bool]],
-    arp: dict[str, str],
-    timeout_s: float,
-    refresh_bound: bool = False,
-) -> int:
-    now = datetime.now(timezone.utc)
-    updated = 0
-
-    with Session(engine) as session:
-        for ip, host in discovered.items():
-            adapter_name, model_hint, serial_hint, reachable = host
-            mac = arp.get(ip)
-            if not mac:
-                continue
-            binding = session.exec(select(PrinterBinding).where(PrinterBinding.printer_mac == mac)).first()
-            if binding:
-                binding.printer_ip = ip
-                session.add(binding)
-                updated += 1
-
-        if refresh_bound:
-            updated += _refresh_bound_printers(session, timeout_s, now)
-
-        session.commit()
-
-    return updated
-
-
 def run_discovery_once(
-    cidrs: list[str],
+    cidr: str,
     timeout_s: float,
-    max_hosts: int,
     refresh_bound: bool = False,
 ) -> int:
     arp: dict[str, str] = {}
     scanner = ScapyArpNeighborScanner()
-    for cidr in cidrs:
-        network = ipaddress.ip_network(cidr, strict=False)
-        arp.update(scanner.scan(network=str(network.network_address), subnet_mask=str(network.netmask), timeout_s=timeout_s))
+    network = ipaddress.ip_network(cidr, strict=False)
+    arp.update(scanner.scan(network=str(network.network_address), subnet_mask=str(network.netmask), timeout_s=timeout_s))
     arp.update(_read_arp_table())
 
+    network_range = ipaddress.ip_network(cidr, strict=False)
     candidate_ips: list[str] = []
-    for ip in sorted(arp.keys()):
+    for ip in sorted(arp):
         try:
-            addr = ipaddress.ip_address(ip)
+            if ipaddress.ip_address(ip) in network_range:
+                candidate_ips.append(ip)
         except ValueError:
             continue
-        if any(addr in ipaddress.ip_network(cidr, strict=False) for cidr in cidrs):
-            candidate_ips.append(ip)
-    if max_hosts > 0:
-        candidate_ips = candidate_ips[:max_hosts]
 
-    discovered: dict[str, tuple[str | None, str | None, str | None, bool]] = {}
+    discovered = Network(range=NetworkRange.parse(cidr))
     with ThreadPoolExecutor(max_workers=min(24, len(candidate_ips) or 1)) as pool:
         futures = {pool.submit(probe_device, ip, timeout_s): ip for ip in candidate_ips}
         for future in as_completed(futures):
@@ -199,13 +156,20 @@ def run_discovery_once(
                 probe = future.result()
             except Exception:
                 probe = None
+            device = Device(
+                mac=MacAddress.parse(arp.get(ip)),
+                ip=IpAddress.parse(ip),
+                type=DeviceType.ARP_NEIGHBOR,
+                params=DeviceParams(status="ON"),
+            )
             if probe and probe.reachable:
-                discovered[ip] = (probe.adapter_name, probe.model_hint, probe.serial_hint, True)
-            else:
-                discovered[ip] = ("arp-neighbor", None, None, True)
+                device.type = DeviceType.from_detected_adapter(probe.adapter_name)
+                device.serial = probe.serial_hint
+                device.model = probe.model_hint
+            discovered.merge_device(device)
 
-    replace_snapshot(build_rows_from_discovery(discovered=discovered, arp=arp))
-    updated = len(discovered)
+    replace_snapshot(build_rows_from_discovery(discovered))
+    updated = len(discovered.devices)
     if refresh_bound:
         updated += refresh_bound_printers_once(timeout_s)
     return updated
@@ -219,36 +183,35 @@ def refresh_bound_printers_once(timeout_s: float) -> int:
     return updated
 
 
+async def _notify_current_rows() -> None:
+    rows = get(ListBindingsUseCase).execute(include_ignored=True)
+    external_rows = get(ListExternalDevicesUseCase).execute()
+    notifications = get(WebSocketNotificationAdapter)
+    await notifications.notify_device_rows(rows)
+    await notifications.notify_external_rows(external_rows)
+
+
 async def discovery_loop(
     stop_event: asyncio.Event,
-    cidrs_raw: str,
+    cidr: str,
     timeout_s: float,
-    max_hosts: int,
     interval_s: float,
 ) -> None:
     try:
-        cidrs = _parse_cidrs(cidrs_raw)
+        network_range = NetworkRange.parse(cidr)
     except ValueError:
-        return
-    if not cidrs:
         return
 
     while not stop_event.is_set():
         try:
             updated = await asyncio.to_thread(
                 run_discovery_once,
-                cidrs=cidrs,
+                cidr=network_range.cidr,
                 timeout_s=timeout_s,
-                max_hosts=max_hosts,
                 refresh_bound=False,
             )
             if updated > 0:
-                with Session(engine) as session:
-                    fleet = FleetViewService(
-                        binding_repo=SqlModelPrinterBindingRepository(session),
-                        discovery_snapshot_provider=list_snapshot_rows,
-                    )
-                    await broadcast_machines("machines_updated", fleet.machine_states_payload())
+                await _notify_current_rows()
         except Exception:
             pass
         try:
@@ -266,12 +229,7 @@ async def bound_refresh_loop(
         try:
             updated = await asyncio.to_thread(refresh_bound_printers_once, timeout_s=timeout_s)
             if updated > 0:
-                with Session(engine) as session:
-                    fleet = FleetViewService(
-                        binding_repo=SqlModelPrinterBindingRepository(session),
-                        discovery_snapshot_provider=list_snapshot_rows,
-                    )
-                    await broadcast_machines("machines_updated", fleet.machine_states_payload())
+                await _notify_current_rows()
         except Exception:
             pass
         try:

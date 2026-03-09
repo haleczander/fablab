@@ -7,10 +7,9 @@ from config import (
     ORCH_DISCOVERY_CIDRS,
     ORCH_DISCOVERY_ENABLED,
     ORCH_DISCOVERY_INTERVAL_S,
-    ORCH_DISCOVERY_MAX_HOSTS,
     ORCH_DISCOVERY_TIMEOUT_S,
 )
-from orchestrator.api.routes.orchestrator import router as orchestrator_router
+from orchestrator.api.routes import router as orchestrator_router
 from orchestrator.infrastructure.network_discovery.runtime import bound_refresh_loop, discovery_loop
 from orchestrator.infrastructure.persistence.db import init_db
 
@@ -29,9 +28,8 @@ async def startup() -> None:
         _discovery_task = asyncio.create_task(
             discovery_loop(
                 stop_event=_discovery_stop_event,
-                cidrs_raw=ORCH_DISCOVERY_CIDRS,
+                cidr=ORCH_DISCOVERY_CIDRS,
                 timeout_s=ORCH_DISCOVERY_TIMEOUT_S,
-                max_hosts=ORCH_DISCOVERY_MAX_HOSTS,
                 interval_s=ORCH_DISCOVERY_INTERVAL_S,
             )
         )

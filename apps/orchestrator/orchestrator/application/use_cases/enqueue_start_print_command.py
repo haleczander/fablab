@@ -1,9 +1,9 @@
-from orchestrator.application.app_services import CommandQueueService
+from orchestrator.application.dependencies import autowired
+from orchestrator.application.app_services.command_queue import CommandQueueService
 
 
 class EnqueueStartPrintCommandUseCase:
-    def __init__(self, queue: CommandQueueService) -> None:
-        self.queue = queue
+    queue: CommandQueueService = autowired()
 
     def execute(self, printer_id: str, command: dict[str, str | int]) -> int:
         return self.queue.push(printer_id, command)

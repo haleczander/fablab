@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from orchestrator.domain.models import PrinterBinding
-from orchestrator.domain.schemas import PrinterStateInput
+from orchestrator.application.dto import PrinterStateInput
+from orchestrator.domain.models import Network, PrinterBinding
 
 
-class PrinterBindingRepositoryPort(Protocol):
+class PrinterBindingPersistencePort(Protocol):
     def list_all(self) -> list[PrinterBinding]: ...
     def get_by_id(self, binding_id: int) -> PrinterBinding | None: ...
     def get_by_printer_id(self, printer_id: str) -> PrinterBinding | None: ...
@@ -48,4 +48,16 @@ class DeviceProberPort(Protocol):
 class DiscoverySnapshotPort(Protocol):
     def list_rows(self) -> list[dict[str, str | bool | int | float | None]]: ...
     def replace_rows(self, rows: list[dict[str, str | bool | int | float | None]]) -> None: ...
+    def replace_from_network(self, network: Network) -> None: ...
+
+
+class NotificationPort(Protocol):
+    async def notify_device_rows(
+        self,
+        rows: list[dict[str, str | bool | int | float | None]],
+    ) -> None: ...
+    async def notify_external_rows(
+        self,
+        rows: list[dict[str, str | None]],
+    ) -> None: ...
 
