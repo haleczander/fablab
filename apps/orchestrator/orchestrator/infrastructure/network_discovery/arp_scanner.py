@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import socket
 import subprocess
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 
 from orchestrator.domain.models import MacAddress
+
+logger = logging.getLogger(__name__)
 
 
 class ScapyArpNeighborScanner:
@@ -19,6 +22,8 @@ class ScapyArpNeighborScanner:
         if not table:
             self._prime_arp_cache(target_network, timeout_s)
         table.update(self._read_arp_cache(target_network))
+        if not table:
+            table.update(self._tcp_sweep(target_network, timeout_s))
         return table
 
     def _scan_with_nmap(
@@ -26,8 +31,8 @@ class ScapyArpNeighborScanner:
         target_network: ipaddress.IPv4Network | ipaddress.IPv6Network,
         timeout_s: float,
     ) -> dict[str, str]:
-        cmd = ["nmap", "-sn", "-n", "-PR", str(target_network), "-oX", "-"]
-        scan_timeout = max(5.0, min(60.0, timeout_s * 10.0))
+        cmd = ["nmap", "-sn", "-n", str(target_network), "-oX", "-"]
+        scan_timeout = max(5.0, min(20.0, timeout_s * 10.0))
         try:
             completed = subprocess.run(
                 cmd,
@@ -36,15 +41,32 @@ class ScapyArpNeighborScanner:
                 timeout=scan_timeout,
                 check=False,
             )
-        except (FileNotFoundError, PermissionError, OSError, subprocess.TimeoutExpired):
+        except FileNotFoundError:
+            logger.warning("discovery: nmap not found in container, ARP scan via nmap skipped")
+            return {}
+        except PermissionError:
+            logger.warning("discovery: nmap permission denied, ARP scan via nmap skipped")
+            return {}
+        except subprocess.TimeoutExpired:
+            logger.warning("discovery: nmap timed out for %s", target_network)
+            return {}
+        except OSError as exc:
+            logger.warning("discovery: nmap OS error for %s: %s", target_network, exc)
             return {}
 
         if completed.returncode != 0:
+            logger.warning(
+                "discovery: nmap returned code %s for %s (stderr=%s)",
+                completed.returncode,
+                target_network,
+                (completed.stderr or "").strip(),
+            )
             return {}
 
         try:
             root = ET.fromstring(completed.stdout)
         except ET.ParseError:
+            logger.warning("discovery: nmap XML parse error for %s", target_network)
             return {}
 
         table: dict[str, str] = {}
@@ -65,8 +87,8 @@ class ScapyArpNeighborScanner:
                 if addr_type == "mac":
                     parsed = MacAddress.parse(addr)
                     mac = str(parsed) if parsed else None
-            if ip and mac:
-                table[ip] = mac
+            if ip:
+                table[ip] = mac or ""
         return table
 
     @staticmethod
@@ -127,6 +149,37 @@ class ScapyArpNeighborScanner:
                     future.result()
                 except Exception:
                     continue
+
+    @staticmethod
+    def _tcp_sweep(
+        target_network: ipaddress.IPv4Network | ipaddress.IPv6Network,
+        timeout_s: float,
+    ) -> dict[str, str]:
+        hosts = [str(host) for host in target_network.hosts()]
+        if not hosts:
+            return {}
+
+        connect_timeout = max(0.1, min(1.0, timeout_s))
+        reachable: dict[str, str] = {}
+
+        def _probe_http(ip: str) -> bool:
+            try:
+                with socket.create_connection((ip, 80), timeout=connect_timeout):
+                    return True
+            except OSError:
+                return False
+
+        with ThreadPoolExecutor(max_workers=min(64, len(hosts))) as pool:
+            futures = {pool.submit(_probe_http, ip): ip for ip in hosts}
+            for future in futures:
+                ip = futures[future]
+                try:
+                    if future.result():
+                        reachable[ip] = ""
+                except Exception:
+                    continue
+        logger.warning("discovery: tcp sweep reachable hosts=%s on %s", len(reachable), target_network)
+        return reachable
 
     @staticmethod
     def _to_network(network: str, subnet_mask: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:

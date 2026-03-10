@@ -1,0 +1,23 @@
+name: fablab-orchestrateur-pc-lan-desktop
+
+services:
+  orchestrateur:
+    build:
+      context: apps/orchestrator
+      dockerfile: Dockerfile
+    container_name: fablab-orchestrateur-pc-lan-desktop
+    env_file:
+      - .env.orchestrateur
+    environment:
+      APP_MODULE: main:app
+      APP_PORT: 8001
+      ORCH_DISCOVERY_ENABLED: 1
+      ORCH_DISCOVERY_CIDRS: 192.168.50.0/24
+    ports:
+      - "8001:8001"
+    volumes:
+      - orchestrator_data:/data
+    restart: unless-stopped
+
+volumes:
+  orchestrator_data:

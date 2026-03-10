@@ -36,7 +36,7 @@ class NetworkDiscoveryService:
         for ip, mac in arp_table.items():
             parsed_ip = IpAddress.parse(ip)
             parsed_mac = MacAddress.parse(mac)
-            if parsed_ip and parsed_mac and network.range.contains(parsed_ip):
+            if parsed_ip and network.range.contains(parsed_ip):
                 discovered.append(
                     Device(
                         mac=parsed_mac,

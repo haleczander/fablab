@@ -1,6 +1,7 @@
 import asyncio
 import ipaddress
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
@@ -12,13 +13,15 @@ from orchestrator.application.dependencies import get
 from orchestrator.application.use_cases.list_bindings import ListBindingsUseCase
 from orchestrator.application.use_cases.list_external_devices import ListExternalDevicesUseCase
 from orchestrator.domain.models import Device, DeviceParams, DeviceType, IpAddress, MacAddress, Network, NetworkRange
-from orchestrator.domain.models import PrinterBinding
 from orchestrator.infrastructure.network_discovery.arp_scanner import ScapyArpNeighborScanner
 from orchestrator.infrastructure.network_discovery.cache import build_rows_from_discovery, list_snapshot_rows, replace_snapshot
 from orchestrator.infrastructure.network_discovery.device_probers import probe_device
 from orchestrator.infrastructure.notifications import WebSocketNotificationAdapter
 from orchestrator.infrastructure.persistence.db import engine
+from orchestrator.infrastructure.persistence.models import SqlPrinterBinding
 from orchestrator.infrastructure.state.live_machine_state import upsert_machine_state
+
+logger = logging.getLogger(__name__)
 
 
 def _read_arp_table() -> dict[str, str]:
@@ -70,7 +73,7 @@ def _map_prusalink_state(raw_state: str) -> str:
 
 def _refresh_bound_printers(session: Session, timeout_s: float, now: datetime) -> int:
     updated = 0
-    bindings = [row for row in session.exec(select(PrinterBinding)).all() if row.printer_id]
+    bindings = [row.to_domain() for row in session.exec(select(SqlPrinterBinding)).all() if row.printer_id]
     snapshot = list_snapshot_rows()
 
     by_mac: dict[str, dict[str, str | bool | int | float | None]] = {}
@@ -132,11 +135,14 @@ def run_discovery_once(
     timeout_s: float,
     refresh_bound: bool = False,
 ) -> int:
+    logger.warning("discovery: start run cidr=%s timeout_s=%s", cidr, timeout_s)
     arp: dict[str, str] = {}
     scanner = ScapyArpNeighborScanner()
     network = ipaddress.ip_network(cidr, strict=False)
     arp.update(scanner.scan(network=str(network.network_address), subnet_mask=str(network.netmask), timeout_s=timeout_s))
+    logger.warning("discovery: arp entries after scanner=%s", len(arp))
     arp.update(_read_arp_table())
+    logger.warning("discovery: arp entries after /proc/net/arp merge=%s", len(arp))
 
     network_range = ipaddress.ip_network(cidr, strict=False)
     candidate_ips: list[str] = []
@@ -146,6 +152,13 @@ def run_discovery_once(
                 candidate_ips.append(ip)
         except ValueError:
             continue
+
+    logger.warning("discovery: candidate IPs in cidr=%s", len(candidate_ips))
+    if not candidate_ips:
+        logger.warning(
+            "discovery: no candidate IP found for %s (container network/ARP visibility issue likely)",
+            cidr,
+        )
 
     discovered = Network(range=NetworkRange.parse(cidr))
     with ThreadPoolExecutor(max_workers=min(24, len(candidate_ips) or 1)) as pool:
@@ -168,10 +181,12 @@ def run_discovery_once(
                 device.model = probe.model_hint
             discovered.merge_device(device)
 
+    logger.warning("discovery: merged devices=%s", len(discovered.devices))
     replace_snapshot(build_rows_from_discovery(discovered))
     updated = len(discovered.devices)
     if refresh_bound:
         updated += refresh_bound_printers_once(timeout_s)
+    logger.warning("discovery: run completed updated=%s", updated)
     return updated
 
 
@@ -212,8 +227,8 @@ async def discovery_loop(
             )
             if updated > 0:
                 await _notify_current_rows()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.exception("discovery: unhandled error in discovery_loop: %s", exc)
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=interval_s)
         except TimeoutError:
@@ -230,8 +245,8 @@ async def bound_refresh_loop(
             updated = await asyncio.to_thread(refresh_bound_printers_once, timeout_s=timeout_s)
             if updated > 0:
                 await _notify_current_rows()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.exception("discovery: unhandled error in bound_refresh_loop: %s", exc)
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=interval_s)
         except TimeoutError:
