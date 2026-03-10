@@ -64,7 +64,18 @@ def probe_prusalink(ip: str, timeout_s: float) -> ProbeResult | None:
         if status == 0:
             continue
         body_upper = body.upper()
-        if "PRUSALINK" in body_upper or path.startswith("/api/") and status in {200, 401, 403}:
+        is_prusalink = "PRUSALINK" in body_upper
+        if not is_prusalink and status == 200 and path in {"/api/v1/info", "/api/v1/status"} and body:
+            try:
+                parsed = json.loads(body)
+                if path == "/api/v1/info" and isinstance(parsed, dict) and parsed.get("serial"):
+                    is_prusalink = True
+                if path == "/api/v1/status" and isinstance(parsed, dict) and isinstance(parsed.get("printer"), dict):
+                    is_prusalink = True
+            except json.JSONDecodeError:
+                is_prusalink = False
+
+        if is_prusalink:
             model = None
             serial = None
             if body:
